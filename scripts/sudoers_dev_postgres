@@ -1,0 +1,3 @@
+# Allow ubuntu to run psql as postgres without password (for running DB migrations on dev).
+# Install once: sudo cp /var/www/html/dev.d.onl/scripts/sudoers_dev_postgres /etc/sudoers.d/99-dev-postgres && sudo chmod 440 /etc/sudoers.d/99-dev-postgres
+ubuntu ALL=(postgres) NOPASSWD: /usr/bin/psql *

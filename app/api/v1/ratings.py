@@ -8,10 +8,12 @@ from typing import Optional
 from decimal import Decimal
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 
 from app.db.postgresql import get_pg_pool
 from app.repositories.rating_repo import RatingRepository
+from app.repositories.domain_repo import DomainRepository
+from app.api.deps import get_domain_repo
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,26 @@ def _serialize(data: dict) -> dict:
 def _paginated(total: int, per_page: int) -> int:
     """Compute total_pages for pagination."""
     return max(1, math.ceil(total / per_page)) if per_page > 0 else 1
+
+
+@router.get("/domain/{domain_name}")
+async def get_public_domain_by_name(
+    domain_name: str,
+    domain_repo: DomainRepository = Depends(get_domain_repo),
+):
+    """Get public domain info by name (for domain page and comments). Returns id, domain, owner_wallet, etc."""
+    domain = await domain_repo.get_by_domain(domain_name)
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    row = await domain_repo.db.fetchrow(
+        "SELECT d.id, d.domain, d.sld_length, d.verified, d.is_mining, d.total_earnings, d.weight, "
+        "d.creation_date, d.verification_time, d.description, d.parking_mode, d.parking_content, d.content_theme, u.wallet AS owner_wallet "
+        "FROM domains d JOIN users u ON d.user_id = u.id WHERE d.domain = $1",
+        domain_name,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    return _serialize(dict(row))
 
 
 @router.get("/domains/rating")

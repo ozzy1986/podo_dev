@@ -7,15 +7,15 @@ databases using credentials from .env file.
 
 import os
 import pytest
-import pytest_asyncio
 from datetime import datetime
-from typing import Generator
+from typing import AsyncGenerator, Generator
 from fastapi.testclient import TestClient
+import httpx
 
 # Force test environment
 os.environ["APP_ENV"] = "development"
 
-from app.config import get_settings, Settings, DatabaseSettings, ClickHouseSettings, SecuritySettings
+from app.config import get_settings, Settings
 from app.db.postgresql import PostgreSQLDatabase, set_pg_pool
 from app.db.clickhouse import ClickHouseDatabase, set_ch_client
 from app.core.security import SecurityManager
@@ -38,48 +38,39 @@ def integration_settings() -> Settings:
     return get_settings()
 
 
-@pytest.fixture(scope="session")
-def real_pg_db(integration_settings) -> Generator[PostgreSQLDatabase, None, None]:
+@pytest.fixture
+async def real_pg_db(integration_settings) -> AsyncGenerator[PostgreSQLDatabase, None]:
     """
-    Create a real PostgreSQL database connection.
-    
-    Connects to domain_mining_dev on localhost using .env credentials.
-    Disconnects after all integration tests complete.
+    Create a real PostgreSQL database connection in the test's event loop.
+
+    Connects to domain_mining_dev using .env credentials. Function-scoped
+    so the connection is created and used in the same loop as the test.
     """
     db = PostgreSQLDatabase(integration_settings.database)
-    
-    # Connect
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(db.connect())
-    
-    yield db
-    
-    # Disconnect
-    loop.run_until_complete(db.disconnect())
-
-
-@pytest.fixture(scope="session")
-def real_ch_db(integration_settings) -> Generator[ClickHouseDatabase, None, None]:
-    """
-    Create a real ClickHouse database connection.
-    
-    Connects to domain_mining_dev on localhost using .env credentials.
-    Disconnects after all integration tests complete.
-    """
-    ch_db = ClickHouseDatabase(integration_settings.clickhouse)
-    
-    # Connect
-    ch_db.connect()
-    
-    yield ch_db
-    
-    # Disconnect
-    ch_db.disconnect()
+    await db.connect()
+    try:
+        yield db
+    finally:
+        await db.disconnect()
 
 
 @pytest.fixture
-async def test_user(real_pg_db: PostgreSQLDatabase) -> Generator[dict, None, None]:
+def real_ch_db(integration_settings) -> Generator[ClickHouseDatabase, None, None]:
+    """
+    Create a real ClickHouse database connection.
+
+    Connects to domain_mining_dev using .env credentials. Function-scoped.
+    """
+    ch_db = ClickHouseDatabase(integration_settings.clickhouse)
+    ch_db.connect()
+    try:
+        yield ch_db
+    finally:
+        ch_db.disconnect()
+
+
+@pytest.fixture
+async def test_user(real_pg_db: PostgreSQLDatabase) -> AsyncGenerator[dict, None]:
     """
     Create a test user in the database.
     
@@ -116,7 +107,7 @@ async def test_user(real_pg_db: PostgreSQLDatabase) -> Generator[dict, None, Non
 async def test_domain(
     real_pg_db: PostgreSQLDatabase,
     test_user: dict
-) -> Generator[dict, None, None]:
+) -> AsyncGenerator[dict, None]:
     """
     Create a test domain linked to test_user.
     
@@ -151,7 +142,7 @@ async def test_domain(
             print(f"Warning: Failed to cleanup test domain: {e}")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def ch_rewards_writable(real_ch_db) -> bool:
     """
     Check if rewards_log supports direct INSERT.
@@ -195,48 +186,54 @@ def auth_headers(auth_token: str) -> dict:
 
 
 @pytest.fixture
-def real_app(integration_settings) -> FastAPI:
+async def real_app(integration_settings) -> AsyncGenerator[FastAPI, None]:
     """
-    Build a FastAPI app with its own database connections.
-    
-    Creates separate PG/CH connections to avoid pool-sharing conflicts
-    with direct-access fixtures (real_pg_db, real_ch_db).
+    Build a FastAPI app with DB connections in the test's event loop.
+
+    Creates PG/CH connections so the app and tests share the same loop.
     """
-    import asyncio
-    
-    # Create separate DB instances for the app (not shared with direct-access fixtures)
     app_pg = PostgreSQLDatabase(integration_settings.database)
     app_ch = ClickHouseDatabase(integration_settings.clickhouse)
-    
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(app_pg.connect())
+    await app_pg.connect()
     app_ch.connect()
-    
-    # Inject into global singletons
+
     set_pg_pool(app_pg)
     set_ch_client(app_ch)
-    
+
     @asynccontextmanager
     async def _noop_lifespan(app: FastAPI):
         yield
-    
+
     app = FastAPI(lifespan=_noop_lifespan)
     setup_cors(app, ["*"])
     app.add_middleware(ErrorHandlerMiddleware)
     setup_exception_handlers(app)
     app.include_router(api_router, prefix="/api")
-    
-    yield app
-    
-    # Cleanup: disconnect app-specific DB connections
-    loop.run_until_complete(app_pg.disconnect())
-    app_ch.disconnect()
+
+    try:
+        yield app
+    finally:
+        await app_pg.disconnect()
+        app_ch.disconnect()
 
 
 @pytest.fixture
 def real_client(real_app: FastAPI) -> TestClient:
-    """Synchronous TestClient wrapping the real FastAPI app."""
+    """Synchronous TestClient wrapping the real FastAPI app (may conflict with async DB in same loop)."""
     return TestClient(real_app, raise_server_exceptions=False)
+
+
+@pytest.fixture
+async def async_client(real_app: FastAPI) -> AsyncGenerator[httpx.AsyncClient, None]:
+    """
+    Async HTTP client that calls the app in the same event loop as tests.
+
+    Use this for integration tests that hit the API with real DB to avoid
+    'another operation in progress' (TestClient runs the app in a thread).
+    """
+    transport = httpx.ASGITransport(app=real_app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
 
 
 # Mark all fixtures in this module as integration tests

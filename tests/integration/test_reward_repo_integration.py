@@ -142,7 +142,8 @@ async def test_get_user_earnings_timeseries(real_pg_db, real_ch_db, test_user, c
     reward_ids = []
     try:
         # Insert rewards with different dates
-        now = datetime.utcnow()
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         for i in range(3):
             reward_id = await repo.log_reward(
                 domain_id=None,

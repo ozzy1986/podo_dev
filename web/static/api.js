@@ -407,6 +407,56 @@ class API {
     async getConfig() {
         return this.request('/config');
     }
+
+    // Comments and votes (social layer)
+    async getComments(entityType, entityId, entityKey, page = 1, perPage = 50) {
+        let url = `/comments?entity_type=${encodeURIComponent(entityType)}&page=${page}&per_page=${perPage}`;
+        if (entityId != null) url += `&entity_id=${entityId}`;
+        if (entityKey) url += `&entity_key=${encodeURIComponent(entityKey)}`;
+        return this.request(url);
+    }
+
+    async getComment(commentId) {
+        return this.request(`/comments/${commentId}`);
+    }
+
+    async createComment(entityType, entityId, entityKey, body, parentId = null) {
+        let url = `/comments?entity_type=${encodeURIComponent(entityType)}`;
+        if (entityId != null) url += `&entity_id=${entityId}`;
+        if (entityKey) url += `&entity_key=${encodeURIComponent(entityKey)}`;
+        const bodyObj = { body };
+        if (parentId != null) bodyObj.parent_id = parentId;
+        return this.request(url, { method: 'POST', body: JSON.stringify(bodyObj) });
+    }
+
+    async deleteComment(commentId) {
+        return this.request(`/comments/${commentId}`, { method: 'DELETE' });
+    }
+
+    async setVote(targetType, targetId, targetKey, value) {
+        let url = `/votes?target_type=${encodeURIComponent(targetType)}&value=${value}`;
+        if (targetId != null) url += `&target_id=${targetId}`;
+        if (targetKey) url += `&target_key=${encodeURIComponent(targetKey)}`;
+        return this.request(url, { method: 'POST', body: JSON.stringify({ value }) });
+    }
+
+    async removeVote(targetType, targetId, targetKey) {
+        let url = `/votes?target_type=${encodeURIComponent(targetType)}`;
+        if (targetId != null) url += `&target_id=${targetId}`;
+        if (targetKey) url += `&target_key=${encodeURIComponent(targetKey)}`;
+        return this.request(url, { method: 'DELETE' });
+    }
+
+    async getKarma(targetType, targetId, targetKey) {
+        let url = `/karma?target_type=${encodeURIComponent(targetType)}`;
+        if (targetId != null) url += `&target_id=${targetId}`;
+        if (targetKey) url += `&target_key=${encodeURIComponent(targetKey)}`;
+        return this.request(url);
+    }
+
+    async getUserKarma() {
+        return this.request('/user/karma');
+    }
 }
 
 // Export singleton instance

@@ -1,5 +1,7 @@
 # d.onl - Domain Ownership Mining Platform
 
+FOLLOW CURSOR RULES
+
 ## Overview
 
 d.onl is a domain ownership mining platform built on the Waves blockchain. Users register internet domains, prove ownership via DNS TXT records, and earn DOMAIN tokens through Proof of Domain Ownership (PoDO) mining. The platform supports email/password and Waves wallet authentication, domain verification, reward distribution, SSL certificate management, domain promotions, and a public rating system.
@@ -150,6 +152,24 @@ Where `tau ≈ 22.23 years`, `alpha = 6`. This ensures 90% of tokens are minted 
 
 The mining pool distributes hourly rewards proportionally to domain weights. Pool state tracks 63 buckets (one per SLD length) for efficient weight aggregation.
 
+### Registrars, Hosters, and Domain Zones
+
+These entities are used in ratings and as targets for comments in the social layer. They are **not** manually created; they are derived during **domain verification**:
+
+- **Registrars**: From WHOIS at verification time. `oracle/whois_service.get_domain_whois_extra()` returns `registrar` from the WHOIS response. The app resolves it to a row in `registrars` (by name/slug) via `_get_or_create_registrar` in `database/db_pg.py`. Table: `registrars` (id, name, slug UNIQUE).
+- **Hosters**: From the domain’s name servers. WHOIS returns `name_servers`; the first NS hostname is normalized by `oracle/whois_service._normalize_hoster_from_ns()` (e.g. `ns1.reg.ru` → `reg.ru`). The app resolves it to a row in `hosters` via `_get_or_create_hoster`. Table: `hosters` (id, name, slug UNIQUE).
+- **Domain zones (TLD)**: Not stored in a table. Zone is derived from the domain name as the part after the last dot: `LOWER(REGEXP_REPLACE(domain, '^.*\\.', ''))` (e.g. `example.com` → `com`). Used in ratings and filtering.
+
+So: **registrar** and **hoster** are populated when a domain is verified (WHOIS is queried and results are written to `domains.registrar_id`, `domains.hoster_id`). **Zone** is always computed from the domain string.
+
+### Social layer (comments, votes, karma)
+
+The platform is a "social network of domains": the main entities are **domain**, **wallet**, **registrar**, **hoster**, **zone**. Each can have a "page" with comments. Comments can have replies (threaded via `parent_id`). Anything that can be commented on can also be voted (like/dislike); votes form **karma** for that entity. **User karma** is the sum of karma of all their approved comments (each user = wallet).
+
+- **Comments**: Stored in `comments` with `entity_type` + `entity_id` (for domain/registrar/hoster) or `entity_key` (for wallet/zone). Root comments have `parent_id = NULL`; replies have `parent_id` set. **Premoderation** is supported via `moderation_status` (`pending` | `approved` | `rejected`); by default new comments are `approved` so they pass without moderation until you switch to premoderation.
+- **Votes**: One row per user per target in `votes`; `value` is +1 or -1. Targets: comment, domain, registrar, hoster, zone, wallet. Comment karma is updated automatically by a DB trigger when votes change.
+- **Karma**: For comments, stored in `comments.karma_score`. For other entities, computed on read as sum of `votes.value`. User karma: sum of `karma_score` of all their approved comments.
+
 ## API Reference
 
 All endpoints use prefix `/api/v1/`. Authentication via `Authorization: Bearer <token>` or `X-Auth-Token: <token>`.
@@ -203,6 +223,20 @@ All endpoints use prefix `/api/v1/`. Authentication via `Authorization: Bearer <
 | GET | /config | No | Public app configuration |
 | GET | /subscription/frequencies | No | Promotion subscription options |
 
+### Comments and votes (social layer)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | /comments | No | List root comments (query: entity_type, entity_id or entity_key) |
+| GET | /comments/{id} | No | Get comment and replies |
+| POST | /comments | Yes | Create comment (query: entity_type, entity_id/entity_key; body: body, parent_id?) |
+| PUT | /comments/{id}/moderation | Yes | Set moderation status (premoderation) |
+| DELETE | /comments/{id} | Yes | Delete own comment |
+| POST | /votes | Yes | Set like/dislike (query: target_type, target_id/target_key; body: value 1 or -1) |
+| DELETE | /votes | Yes | Remove vote (query: target_type, target_id/target_key) |
+| GET | /karma | No | Entity karma (query: target_type, target_id/target_key) |
+| GET | /user/karma | Yes | Current user karma |
+
 ### Error Response Format
 
 All errors return a consistent envelope:
@@ -255,7 +289,7 @@ In development mode (`APP_ENV=development`), money-related jobs are disabled.
 
 Migrations are in `database/migrations/`. They use PostgreSQL `DO $$ BEGIN ... END $$` blocks for idempotency.
 
-Run order: `schema.sql` first, then numbered migrations (002-018) in order, then `add_password_field.sql` and `allow_null_telegram_id.sql`.
+Run order: `schema.sql` first, then numbered migrations (002-019) in order, then `add_password_field.sql` and `allow_null_telegram_id.sql`. Migration `019_comments_and_votes.sql` adds `registrars`/`hosters` if missing, `comments`, `votes`, and triggers for comment karma.
 
 ClickHouse migration: `018_clickhouse_optimized_schema.sql` (run on ClickHouse server).
 

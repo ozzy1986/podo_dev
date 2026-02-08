@@ -7,9 +7,7 @@ connections are required to run these tests.
 
 import logging
 import os
-import asyncio
 from datetime import datetime
-from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -38,18 +36,6 @@ def fix_logging_handlers():
     for h in to_remove:
         root.removeHandler(h)
     yield
-
-# ---------------------------------------------------------------------------
-# Fixtures – event loop
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """Create a single event loop for the entire test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
 
 # ---------------------------------------------------------------------------
 # Fixtures – configuration

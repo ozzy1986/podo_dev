@@ -132,6 +132,8 @@
                         </div>
                     </div>
                     
+                    <div id="domain-comments-container" class="mt-4"></div>
+                    
                     <div class="mt-4 text-center">
                         <a href="/rating" onclick="event.preventDefault(); router.navigate('/rating');" class="btn btn-outline-primary" data-i18n="view_all_domains">View All Domains</a>
                     </div>
@@ -139,6 +141,9 @@
             `;
             
             this.updateI18n();
+            if (data.id != null) {
+                this.renderCommentsBlock('domain-comments-container', 'domain', data.id, null);
+            }
             
         } catch (error) {
             console.error('[App] Error loading domain page:', error);
