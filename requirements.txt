@@ -1,0 +1,49 @@
+# d.onl v2.0 - Production Dependencies
+
+# Web Framework
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# Database
+asyncpg==0.29.0
+clickhouse-driver==0.2.7
+psycopg2-binary==2.9.9
+
+# Authentication & Security
+pyjwt==2.8.0
+bcrypt==4.1.2
+cryptography==42.0.2
+
+# DNS & Domain Verification
+dnspython==2.4.2
+python-whois==0.8.0
+idna==3.6
+
+# Blockchain (Waves) - axolotl required for wallet signature verification
+pywaves-ce>=2.0.0
+python-axolotl-curve25519>=0.4.1
+
+# SSL Certificates
+certbot==2.9.0
+josepy<2.0.0
+
+# Task Scheduling
+APScheduler==3.10.4
+
+# Email
+aiosmtplib==3.0.1
+email-validator>=2.2.0
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+
+# Development & Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+httpx==0.26.0
+black==24.1.1
+ruff==0.1.14

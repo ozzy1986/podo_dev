@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/">
+    <link rel="icon" type="image/x-icon" href="/domain_token.ico">
+    <title>d.onl - Proof of Domain Ownership</title>
+    
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YZRGV5PNHE"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-YZRGV5PNHE');
+    </script>
+    
+    <!-- Yandex.Metrika counter -->
+    <script type="text/javascript">
+        (function(m,e,t,r,i,k,a){
+            m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+            m[i].l=1*new Date();
+            for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+            k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+        })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=103555923', 'ym');
+
+        ym(103555923, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", accurateTrackBounce:true, trackLinks:true});
+    </script>
+    <noscript><div><img src="https://mc.yandex.ru/watch/103555923" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+    <!-- /Yandex.Metrika counter -->
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/static/style.css">
+    
+    <!-- Initialize theme immediately to prevent flash -->
+    <script>
+        (function() {
+            // Check for user's saved preference first
+            const savedTheme = localStorage.getItem('theme');
+            
+            if (savedTheme) {
+                // User has manually set a theme, use it
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } else {
+                // No saved preference, detect system theme
+                const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const systemTheme = prefersDark ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', systemTheme);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary" id="main-nav" style="display: none;">
+        <div class="container">
+            <a class="navbar-brand" href="#" data-route="/">
+                <i class="bi bi-globe"></i> d.onl
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-route="/">
+                            <span data-i18n="dashboard">Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-route="/domains">
+                            <span data-i18n="your_domains">Domains</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-route="/wallet">
+                            <span data-i18n="set_wallet">Wallet</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-route="/withdraw">
+                            <span data-i18n="request_withdrawal">Withdraw</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-route="/widgets">
+                            <span data-i18n="widgets">Widgets</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-route="/rating">
+                            <span data-i18n="domains_rating">Ratings</span>
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="refresh-btn" onclick="event.preventDefault(); app.refresh();" title="Refresh">
+                            <span data-i18n="refresh">Refresh</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <div class="nav-link theme-toggle" id="theme-toggle" onclick="app.toggleTheme();" title="Toggle theme">
+                            <i class="bi bi-sun-fill theme-toggle-icon" id="theme-icon"></i>
+                            <div class="theme-toggle-switch" id="theme-switch"></div>
+                        </div>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="languageDropdown" role="button" data-bs-toggle="dropdown" onclick="event.preventDefault(); return false;">
+                            <span id="current-lang">EN</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" id="language-menu">
+                            <li><a class="dropdown-item" href="javascript:void(0)" data-lang="en">English</a></li>
+                            <li><a class="dropdown-item" href="javascript:void(0)" data-lang="ru">Русский</a></li>
+                            <li><a class="dropdown-item" href="javascript:void(0)" data-lang="ar">العربية</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="logout-btn" onclick="event.preventDefault(); app.logout();">
+                            <span data-i18n="logout">Logout</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Guest navigation (visible when not logged in) -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary" id="guest-nav" style="display: none;">
+        <div class="container">
+            <a class="navbar-brand" href="#" data-route="/">
+                <i class="bi bi-globe"></i> d.onl
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#guestNavbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="guestNavbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-route="/login">
+                            <span data-i18n="login">Login</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <div class="nav-link theme-toggle" onclick="app.toggleTheme();" title="Toggle theme">
+                            <i class="bi bi-sun-fill theme-toggle-icon" id="guest-theme-icon"></i>
+                            <div class="theme-toggle-switch"></div>
+                        </div>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="javascript:void(0)" id="guest-languageDropdown" role="button" data-bs-toggle="dropdown" onclick="event.preventDefault(); return false;">
+                            <span id="guest-current-lang">EN</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" id="guest-language-menu">
+                            <li><a class="dropdown-item" href="javascript:void(0)" data-lang="en">English</a></li>
+                            <li><a class="dropdown-item" href="javascript:void(0)" data-lang="ru">Русский</a></li>
+                            <li><a class="dropdown-item" href="javascript:void(0)" data-lang="ar">العربية</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Withdrawal Fix Notice -->
+    <div class="alert alert-info alert-dismissible fade show mb-0 rounded-0 border-0" role="alert" id="withdrawal-fix-notice" style="background-color: #e7f3ff; border-left: 4px solid #0d6efd !important; display: none;">
+        <div class="container">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-info-circle me-2" style="font-size: 1.1rem;"></i>
+                <div class="flex-grow-1">
+                    <strong data-i18n="withdrawal_fix_title">Withdrawal Issue Fixed</strong>
+                    <span data-i18n="withdrawal_fix_message"> - The withdrawal error has been resolved. If you had a pending withdrawal request that failed, please submit a new withdrawal request.</span>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main id="main-content" class="container mt-4">
+        <!-- Content will be dynamically loaded here -->
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Container for Notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container"></div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- WX Network authentication uses redirect-based Web Auth API (no libraries needed) -->
+    <script>
+        // Optional overrides for WX Network auth.
+        // By default, wx.network will redirect back to whatever origin you're currently on.
+        //
+        // To override the redirect destination (optional):
+        // window.WX_AUTH_REFERRER = 'https://d.onl';
+        //
+        // Optional: success path for return after auth (path only)
+        window.WX_AUTH_SUCCESS_PATH = '/login';
+        // Optional: displayed service name in wx.network UI
+        // window.WX_AUTH_SERVICE_NAME = 'd.onl - Proof of Domain Ownership';
+    </script>
+    
+    <!-- Core Scripts (load in order) -->
+    <!-- Add cache-busting timestamp to force reload -->
+    <script>
+        const CACHE_BUST = '?v=' + Date.now();
+        
+        // Load scripts with error handling
+        function loadScript(src, onError) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src + CACHE_BUST; // Add cache-busting
+                script.onload = () => {
+                    console.log('[Init] Loaded:', src);
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.error('[Init] Failed to load:', src);
+                    if (onError) onError();
+                    reject(new Error(`Failed to load ${src}`));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // Load all scripts sequentially
+        (async function() {
+            try {
+                // 1. Core dependencies
+                await loadScript('/static/api.js');
+                await loadScript('/static/i18n.js');
+                await loadScript('/static/router.js', () => {
+                    document.getElementById('main-content').innerHTML = `
+                        <div class="alert alert-danger">
+                            <h4>Critical Error</h4>
+                            <p>Failed to load router.js</p>
+                            <p>Check if file exists at: <code>/static/router.js</code></p>
+                            <p>Check browser Network tab (F12) for 404 errors</p>
+                        </div>
+                    `;
+                });
+                
+                // 2. App class definition (must load before modules)
+                await loadScript('/static/js/app-class.js');
+                
+                // 3. Module files that extend App.prototype
+                await loadScript('/static/js/ui.js');
+                await loadScript('/static/js/auth.js');
+                await loadScript('/static/js/dashboard.js');
+                await loadScript('/static/js/domains.js');
+                await loadScript('/static/js/ratings.js');
+                await loadScript('/static/js/wallet.js');
+                await loadScript('/static/js/widgets.js');
+                
+                // 4. App core (init, routes, refresh, instantiation) - loads LAST
+                await loadScript('/static/app.js');
+                
+                console.log('[Init] All scripts loaded');
+                console.log('[Init] API:', typeof api !== 'undefined' ? '✓' : '✗');
+                console.log('[Init] i18n:', typeof i18n !== 'undefined' ? '✓' : '✗');
+                console.log('[Init] Router:', typeof router !== 'undefined' ? '✓' : '✗');
+                console.log('[Init] App class:', typeof App !== 'undefined' ? '✓' : '✗');
+                console.log('[Init] App instance:', typeof app !== 'undefined' ? '✓' : '✗');
+                
+                // Start app initialization after all scripts loaded
+                // Since scripts load dynamically, DOM is already ready
+                console.log('[Init] Starting app initialization...');
+                // Small delay to ensure all modules are fully initialized
+                setTimeout(() => {
+                    if (typeof startApp === 'function') {
+                        startApp();
+                    } else {
+                        console.error('[Init] startApp function not found!');
+                    }
+                }, 50);
+            } catch (error) {
+                console.error('[Init] Script loading failed:', error);
+            }
+        })();
+    </script>
+</body>
+</html>
+

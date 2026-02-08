@@ -1,0 +1,1141 @@
+{-# STDLIB_VERSION 6 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+# ===============================================
+# PoDO Smart Contract v2.14 (SECURITY HARDENING)
+# ===============================================
+# Improvements versus v2.13:
+# - updateLimits(): Added min/max bounds to prevent accidental zeroing or excessive values
+# - migrateToNewContract(): Added 25% per-cycle limit (same as emergencyWithdraw)
+# - init(): Added tokenId format validation
+# - Enhanced security for "deploy and forget" production use
+# ===============================================
+
+# ----------------- KEYS & CONSTANTS -----------------
+let KEY_ORACLE_ADDRESS = "oracle_address"
+let KEY_TOKEN_ID       = "token_id"
+let KEY_ADMIN_PUBKEY   = "admin_pubkey"
+let KEY_VERSION        = "version"
+
+let KEY_TOTAL_DISTRIBUTED      = "total_distributed"
+let KEY_TOTAL_PAYOUTS          = "total_payouts"
+let KEY_LAST_PAYOUT            = "last_payout_ts"
+let KEY_PAUSED                 = "paused"
+let KEY_EMERGENCY_SNAPSHOT     = "emergency_snapshot"
+let KEY_EMERGENCY_WITHDRAWN    = "emergency_withdrawn"
+let KEY_BATCH_STATS_PREFIX     = "batch_stats_"
+let KEY_DAILY_STATE_DAY        = "daily_state_day"
+let KEY_DAILY_STATE_AMOUNT     = "daily_state_amount"
+let KEY_HOURLY_STATE_HOUR      = "hourly_state_hour"
+let KEY_HOURLY_STATE_AMOUNT    = "hourly_state_amount"
+let KEY_HOURLY_STATE_AMOUNT_PREV = "hourly_state_amount_prev"
+
+# Governance Keys
+let KEY_MAX_DAILY_DISTRIBUTION = "max_daily_distribution"
+let KEY_MAX_HOURLY_DISTRIBUTION = "max_hourly_distribution"
+let KEY_MAX_INDIVIDUAL_AMOUNT  = "max_individual_amount"
+let KEY_MAX_BATCH_AMOUNT       = "max_batch_amount"
+
+# v2.11: Emergency & Safety Keys
+let KEY_LAST_EMERGENCY_WITHDRAW_TS = "last_emergency_withdraw_ts"
+let KEY_MIGRATION_TARGET           = "migration_target"
+let KEY_MIGRATION_TIMESTAMP        = "migration_timestamp"
+
+let MAX_BATCH_SIZE = 20  # Increased to 20 for efficiency
+let DEFAULT_MAX_INDIVIDUAL_AMOUNT = 5000000 * 100000000    # 5M tokens per recipient
+let DEFAULT_MAX_BATCH_AMOUNT = 5000000 * 100000000         # 5M tokens max per batch
+let DEFAULT_MAX_DAILY_DISTRIBUTION = 50000000 * 100000000  # 50M tokens/day
+let DEFAULT_MAX_HOURLY_DISTRIBUTION = 5000000 * 100000000  # 5M tokens/hour
+let MIN_PAYOUT_INTERVAL = 60 * 1000  # 1 minute between payouts
+let MAX_EMERGENCY_WITHDRAWAL_PERCENT = 25  # Can only withdraw 25% of pre-pause balance per emergency cycle
+let MIN_EMERGENCY_INTERVAL = 3600000  # v2.11: 1 hour minimum between emergency withdrawals
+let ANOMALY_THRESHOLD_MULTIPLIER = 3  # v2.11: Flag if distribution >3x previous period
+let MIN_ANOMALY_BASELINE = 50000 * 100000000 # v2.12: Minimum baseline for anomaly detection (50k tokens)
+
+# v2.14: Bounds for updateLimits() to prevent accidental misconfiguration
+let MIN_DAILY_LIMIT = 1000000 * 100000000      # 1M tokens minimum daily limit
+let MAX_DAILY_LIMIT = 500000000 * 100000000    # 500M tokens maximum daily limit
+let MIN_HOURLY_LIMIT = 100000 * 100000000      # 100K tokens minimum hourly limit
+let MAX_HOURLY_LIMIT = 50000000 * 100000000    # 50M tokens maximum hourly limit
+let MIN_INDIVIDUAL_LIMIT = 10000 * 100000000   # 10K tokens minimum per recipient
+let MAX_INDIVIDUAL_LIMIT = 50000000 * 100000000 # 50M tokens maximum per recipient
+let MIN_BATCH_LIMIT = 10000 * 100000000        # 10K tokens minimum per batch
+let MAX_BATCH_LIMIT = 50000000 * 100000000     # 50M tokens maximum per batch
+
+# v2.14: Migration tracking
+let MIN_MIGRATION_INTERVAL = 3600000  # 1 hour between migrations
+let BATCH_ID_INDICES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+let ALLOWED_BATCH_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
+
+# Epoch for day calculation (prevents overflow)
+let EPOCH_2024 = 1704067200000  # Jan 1, 2024 in milliseconds
+
+# ----------------- INTERNAL HELPERS -----------------
+
+func legacyOracleMatches(addr: Address) = {
+  match getString(this, KEY_ORACLE_ADDRESS) {
+    case s:String =>
+      match addressFromString(s) {
+        case a:Address => a == addr
+        case _ => false
+      }
+    case _ => false
+  }
+}
+
+func getTokenId() = {
+  match getString(this, KEY_TOKEN_ID) {
+    case s:String => fromBase58String(s)
+    case _ => throw("Token ID not set")
+  }
+}
+
+func getBatchKey(batchId: String) = {
+  "batch_" + batchId
+}
+
+func getBatchTimestampKey(batchId: String) = {
+  "batch_ts_" + batchId
+}
+
+func getCurrentDay() = {
+  # Use epoch offset to keep numbers manageable and prevent overflow
+  if (lastBlock.timestamp < EPOCH_2024) then 0
+  else (lastBlock.timestamp - EPOCH_2024) / 86400000
+}
+
+func getCurrentHour() = {
+  if (lastBlock.timestamp < EPOCH_2024) then 0
+  else (lastBlock.timestamp - EPOCH_2024) / 3600000
+}
+
+func getAdminPubKey() = {
+  match getString(this, KEY_ADMIN_PUBKEY) {
+    case s:String => fromBase58String(s)
+    case _ => throw("Admin public key not set")
+  }
+}
+
+func getPeriodState(periodKey: String, amountKey: String, currentPeriod: Int) = {
+  let storedPeriod = match getInteger(this, periodKey) {
+    case val:Int => val
+    case _ => -1
+  }
+  let amount = if (storedPeriod == currentPeriod) then match getInteger(this, amountKey) {
+    case val:Int => val
+    case _ => 0
+  } else 0
+  (storedPeriod, amount)
+}
+
+func buildPeriodEntries(periodKey: String, amountKey: String, storedPeriod: Int, currentPeriod: Int, newAmount: Int) = {
+  if (storedPeriod == currentPeriod) then
+    [IntegerEntry(amountKey, newAmount)]
+  else
+    [
+      IntegerEntry(periodKey, currentPeriod),
+      IntegerEntry(amountKey, newAmount)
+    ]
+}
+
+func percentOf(value: Int, percent: Int) = {
+  if (percent < 0) then throw("Percent cannot be negative")
+  else if (percent == 0 || value == 0) then 0
+  else if (percent > 100) then throw("Percent cannot exceed 100")
+  else {
+    let quotient = value / 100
+    let remainder = value - (quotient * 100)
+    quotient * percent + (remainder * percent) / 100
+  }
+}
+
+func validateBatchId(batchId: String) = {
+  # NON-RECURSIVE validation with explicit allowlist (ASCII alphanumeric + _/- only)
+  let len = size(batchId)
+  if (len < 8) then throw("Batch ID too short (min 8 chars)")
+  else if (len > 64) then throw("Batch ID too long (max 64 chars)")
+  else {
+    func foldChars(valid: Boolean, idx: Int) = {
+      if (!valid) then false
+      else if (idx >= len) then valid  # Skip indices beyond string length
+      else {
+        let prefix = take(batchId, idx + 1)
+        let char = drop(prefix, idx)
+        if (size(char) != 1) then throw("Batch ID contains non-ASCII character at index " + toString(idx))
+        else if (indexOf(ALLOWED_BATCH_CHARS, char) == unit) then
+          throw("Batch ID character '" + char + "' at index " + toString(idx) + " is not allowed (use A-Z, a-z, 0-9, _, -)")
+        else true
+      }
+    }
+    # Iterate through all possible indices, foldChars skips indices beyond string length
+    let charsValid = FOLD<64>(BATCH_ID_INDICES, true, foldChars)
+    if (!charsValid) then throw("Invalid batch ID characters")
+    else true
+  }
+}
+
+
+func getMaxIndividualAmount() = match getInteger(this, KEY_MAX_INDIVIDUAL_AMOUNT) {
+  case val:Int => val
+  case _ => DEFAULT_MAX_INDIVIDUAL_AMOUNT
+}
+func getMaxBatchAmount() = match getInteger(this, KEY_MAX_BATCH_AMOUNT) {
+  case val:Int => val
+  case _ => DEFAULT_MAX_BATCH_AMOUNT
+}
+func getMaxDailyDistribution() = match getInteger(this, KEY_MAX_DAILY_DISTRIBUTION) {
+  case val:Int => val
+  case _ => DEFAULT_MAX_DAILY_DISTRIBUTION
+}
+func getMaxHourlyDistribution() = match getInteger(this, KEY_MAX_HOURLY_DISTRIBUTION) {
+  case val:Int => val
+  case _ => DEFAULT_MAX_HOURLY_DISTRIBUTION
+}
+
+func validateAmount(amount: Int, limit: Int) = {
+  if (amount <= 0) then throw("Amount must be positive")
+  else if (amount > limit) then throw("Individual amount exceeds limit (max " + toString(limit / 100000000) + " tokens)")
+  else true
+}
+
+# v2.11: Anomaly Detection - Circuit Breaker
+func checkAnomalyDetection(currentPeriodAmount: Int, previousPeriodAmount: Int) = {
+  let baseline = if (previousPeriodAmount < MIN_ANOMALY_BASELINE) then MIN_ANOMALY_BASELINE else previousPeriodAmount
+  if (currentPeriodAmount > baseline * ANOMALY_THRESHOLD_MULTIPLIER) then
+    throw("Circuit breaker triggered: Distribution anomaly detected. " +
+          "Current: " + toString(currentPeriodAmount / 100000000) + " tokens, " +
+          "Baseline: " + toString(baseline / 100000000) + " tokens. " +
+          "Manual review required - contact admin to unpause.")
+  else true
+}
+
+func processGlobalLimits(amount: Int, maxDaily: Int, maxHourly: Int) = {
+  # 8. Daily Distribution Limit
+  let currentDay = getCurrentDay()
+  let (storedDay, dailyDist) = getPeriodState(KEY_DAILY_STATE_DAY, KEY_DAILY_STATE_AMOUNT, currentDay)
+  if (dailyDist + amount > maxDaily) then
+    throw("Daily distribution limit exceeded. " + 
+          "Used: " + toString(dailyDist / 100000000) + "/" + toString(maxDaily / 100000000) + " tokens. " +
+          "Remaining: " + toString((maxDaily - dailyDist) / 100000000) + " tokens." +
+          (if (amount > 0) then " Requested: " + toString(amount / 100000000) + " tokens." else ""))
+  else
+
+  # 9. Hourly Distribution Limit
+  let currentHour = getCurrentHour()
+  let (storedHour, hourlyDist) = getPeriodState(KEY_HOURLY_STATE_HOUR, KEY_HOURLY_STATE_AMOUNT, currentHour)
+  let rawPreviousHourAmount = match getInteger(this, KEY_HOURLY_STATE_AMOUNT) {
+    case val:Int => val
+    case _ => 0
+  }
+  let previousHourAmount =
+    if (storedHour == currentHour) then
+      match getInteger(this, KEY_HOURLY_STATE_AMOUNT_PREV) {
+        case val:Int => val
+        case _ => 0
+      }
+    else if (storedHour >= 0) then
+      rawPreviousHourAmount
+    else 0
+  let hourRolloverEntries =
+    if (storedHour >= 0 && storedHour != currentHour) then
+      [IntegerEntry(KEY_HOURLY_STATE_AMOUNT_PREV, rawPreviousHourAmount)]
+    else []
+  if (hourlyDist + amount > maxHourly) then
+    throw("Hourly distribution limit exceeded. " + 
+          "Used: " + toString(hourlyDist / 100000000) + "/" + toString(maxHourly / 100000000) + " tokens. " +
+          "Remaining: " + toString((maxHourly - hourlyDist) / 100000000) + " tokens. " +
+          (if (amount > 0) then " Requested: " + toString(amount / 100000000) + " tokens. " else "") +
+          "Wait " + toString((3600000 - (lastBlock.timestamp % 3600000)) / 60000) + " minutes for next hour.")
+  else {
+    # v2.11: Anomaly Detection - Circuit Breaker
+    strict _anomalyCheck = checkAnomalyDetection(hourlyDist + amount, previousHourAmount)
+    
+    buildPeriodEntries(KEY_DAILY_STATE_DAY, KEY_DAILY_STATE_AMOUNT, storedDay, currentDay, dailyDist + amount) ++
+    buildPeriodEntries(KEY_HOURLY_STATE_HOUR, KEY_HOURLY_STATE_AMOUNT, storedHour, currentHour, hourlyDist + amount) ++
+    hourRolloverEntries
+  }
+}
+
+func checkPayoutInterval() = {
+  if (MIN_PAYOUT_INTERVAL == 0) then true
+  else {
+    let lastPayout = match getInteger(this, KEY_LAST_PAYOUT) {
+      case val:Int => val
+      case _ => 0
+    }
+    if (lastPayout == 0) then true
+    else {
+      let elapsed = lastBlock.timestamp - lastPayout
+      if (elapsed < MIN_PAYOUT_INTERVAL) then
+        throw("Payout interval limit not met. Wait " + toString((MIN_PAYOUT_INTERVAL - elapsed) / 1000) + "s")
+      else true
+    }
+  }
+}
+
+func isAuthorizedOracleInvoker(addr: Address) = {
+  # Simplified: always use legacy single oracle check
+  legacyOracleMatches(addr)
+}
+
+
+func ensureOracleAuthorization(invocation: Invocation) = {
+  # Simplified: always use legacy single oracle check
+  if (!legacyOracleMatches(invocation.caller)) then
+    throw("Only legacy oracle can invoke payout")
+  else [toString(invocation.caller)]
+}
+
+func proofForKeyExists(bodyBytes: ByteVector, proofs: List[ByteVector], pk: ByteVector) = {
+  func foldProof(found: Boolean, proof: ByteVector) = {
+    if (found) then true
+    else if (size(proof) == 0) then false
+    else sigVerify(bodyBytes, proof, pk)
+  }
+  FOLD<8>(proofs, false, foldProof)
+}
+
+func replaceIntAt(values: List[Int], idx: Int, newValue: Int) = {
+  func foldReplace(acc: List[Int], currentIdx: Int) = {
+    if (currentIdx >= size(values)) then acc
+    else if (currentIdx == idx) then acc :+ newValue
+    else acc :+ values[currentIdx]
+  }
+  FOLD<64>(BATCH_ID_INDICES, [], foldReplace)  # Using BATCH_ID_INDICES as it has enough elements
+}
+
+# v2.11: Oracle Health Tracking
+
+func preparePayout(i: Invocation, batchId: String) = {
+  if (match getBoolean(this, KEY_PAUSED) {
+    case val:Boolean => val
+    case _ => false
+  }) then {
+    let adminKey = getString(this, KEY_ADMIN_PUBKEY)
+    let adminContact = match adminKey {
+      case s:String => s
+      case _ => throw("Admin not configured")
+    }
+    throw("Contract is paused. Contact admin at " + adminContact)
+  } else {
+    strict authorizedOracles = ensureOracleAuthorization(i)
+    strict _batchValidated = validateBatchId(batchId)
+    strict _intervalOk = checkPayoutInterval()
+    let batchKey = getBatchKey(batchId)
+    let batchTimestampKey = getBatchTimestampKey(batchId)
+    if (match getBoolean(this, batchKey) {
+      case val:Boolean => val
+      case _ => false
+    }) then
+      throw("Batch '" + batchId + "' already processed on " +
+            toString(match getInteger(this, batchTimestampKey) {
+              case val:Int => val
+              case _ => 0
+            }))
+    else {
+      let tokenId = getTokenId()
+      let maxIndividual = getMaxIndividualAmount()
+      let maxBatch = getMaxBatchAmount()
+      let maxDaily = getMaxDailyDistribution()
+      let maxHourly = getMaxHourlyDistribution()
+      (
+        authorizedOracles,
+        tokenId,
+        batchKey,
+        batchTimestampKey,
+        maxIndividual,
+        maxBatch,
+        maxDaily,
+        maxHourly
+      )
+    }
+  }
+}
+
+# ----------------- INITIALIZATION -----------------
+
+@Callable(i)
+func init(oracleAddress: String, tokenId: String, adminPubKey: String) = {
+  # 1. Check if already initialized
+  let currentAdmin = getString(this, KEY_ADMIN_PUBKEY)
+  let isInitialized = currentAdmin.isDefined()
+  
+  if (isInitialized) then {
+    # If re-init: Only allow current admin
+    strict _adminCheck = match currentAdmin {
+      case adminStr:String =>
+        if (i.callerPublicKey != fromBase58String(adminStr)) then
+          throw("Only admin can re-initialize")
+        else unit
+      case _ => throw("Admin not configured")
+    }
+
+    # v2.14: Validate tokenId on re-init as well
+    let tokenIdBytes = fromBase58String(tokenId)
+    if (size(tokenIdBytes) != 32) then
+      throw("Invalid token ID: must be 32 bytes when decoded from base58. Got " + toString(size(tokenIdBytes)) + " bytes")
+    else {
+      let oracleAddr = addressFromString(oracleAddress)
+      if (!oracleAddr.isDefined()) then
+        throw("Invalid oracle address format: " + oracleAddress)
+      else
+        [
+          StringEntry(KEY_ORACLE_ADDRESS, oracleAddress),
+          StringEntry(KEY_TOKEN_ID, tokenId),
+          StringEntry(KEY_ADMIN_PUBKEY, adminPubKey),
+          StringEntry(KEY_VERSION, "2.14")
+        ]
+    }
+  } else {
+    # If first init: Require that the provided adminPubKey matches the caller's public key
+    if (fromBase58String(adminPubKey) != i.callerPublicKey) then
+      throw("When initializing, adminPubKey must match caller's public key")
+    else
+      # v2.14: Validate tokenId format (must be valid base58, 32 bytes when decoded)
+      let tokenIdBytes = fromBase58String(tokenId)
+      if (size(tokenIdBytes) != 32) then
+        throw("Invalid token ID: must be 32 bytes when decoded from base58. Got " + toString(size(tokenIdBytes)) + " bytes")
+      else
+      # v2.14: Validate oracle address format
+      let oracleAddr = addressFromString(oracleAddress)
+      if (!oracleAddr.isDefined()) then
+        throw("Invalid oracle address format: " + oracleAddress)
+      else
+      [
+        StringEntry(KEY_ORACLE_ADDRESS, oracleAddress),
+        StringEntry(KEY_TOKEN_ID, tokenId),
+        StringEntry(KEY_ADMIN_PUBKEY, adminPubKey),
+        StringEntry(KEY_VERSION, "2.14"),
+        IntegerEntry(KEY_TOTAL_DISTRIBUTED, 0),
+        IntegerEntry(KEY_TOTAL_PAYOUTS, 0)
+      ]
+  }
+}
+
+# ----------------- PAYOUT LOGIC -----------------
+
+@Callable(i)
+func payoutSingle(batchId: String, recipient: String, amount: Int) = {
+  # Process one payout at a time (RECOMMENDED)
+  let payoutCtx = preparePayout(i, batchId)
+  let authorizedOracles = payoutCtx._1
+  let tokenId = payoutCtx._2
+  let batchKey = payoutCtx._3
+  let batchTimestampKey = payoutCtx._4
+  let maxIndividual = payoutCtx._5
+  let maxBatch = payoutCtx._6
+  let maxDaily = payoutCtx._7
+  let maxHourly = payoutCtx._8
+
+  # 6. Amount Validation
+  strict _amountValidated = validateAmount(amount, maxIndividual)
+
+  # 7. Batch Amount Check (single payout = batch of 1)
+  if (amount > maxBatch) then 
+    throw("Amount " + toString(amount / 100000000) + " tokens exceeds batch limit of " + 
+          toString(maxBatch / 100000000) + " tokens")
+  else
+
+  # 8. Process Global Limits (Daily, Hourly, Anomaly)
+  let limitEntries = processGlobalLimits(amount, maxDaily, maxHourly)
+
+  # 10. Overflow Check (Sanity)
+  let previousDist = match getInteger(this, KEY_TOTAL_DISTRIBUTED) {
+    case val:Int => val
+    case _ => 0
+  }
+  if (previousDist + amount < previousDist) then 
+    throw("Integer overflow detected. Total would be: " + toString(previousDist + amount))
+  else
+
+  # 11. Balance Check
+  let contractBalance = assetBalance(this, tokenId)
+  if (contractBalance < amount) then 
+    throw("Insufficient contract balance. Available: " + toString(contractBalance / 100000000) + 
+          " tokens, Requested: " + toString(amount / 100000000) + " tokens")
+  else
+
+  # 12. Execute Transfer and Update State
+  let previousPayouts = match getInteger(this, KEY_TOTAL_PAYOUTS) {
+    case val:Int => val
+    case _ => 0
+  }
+
+  let recipientAddr = match addressFromString(recipient) {
+    case addr:Address => addr
+    case _ => throw("Invalid recipient address")
+  }
+  [
+    ScriptTransfer(recipientAddr, amount, tokenId),
+    BooleanEntry(batchKey, true),
+    IntegerEntry(batchTimestampKey, lastBlock.timestamp),
+    IntegerEntry("batch_ts_" + batchId, lastBlock.timestamp),
+    IntegerEntry(KEY_TOTAL_DISTRIBUTED, previousDist + amount),
+    IntegerEntry(KEY_TOTAL_PAYOUTS, previousPayouts + 1),
+    IntegerEntry(KEY_LAST_PAYOUT, lastBlock.timestamp),
+    IntegerEntry(KEY_BATCH_STATS_PREFIX + "1", match getInteger(this, KEY_BATCH_STATS_PREFIX + "1") {
+      case val:Int => val
+      case _ => 0
+    } + 1)
+  ] ++ limitEntries
+}
+
+@Callable(i)
+func payoutBatch(batchId: String, recipients: List[String], amounts: List[Int]) = {
+  # Process variable number of recipients in one transaction (MODERN METHOD)
+  let payoutCtx = preparePayout(i, batchId)
+  let authorizedOracles = payoutCtx._1
+  let tokenId = payoutCtx._2
+  let batchKey = payoutCtx._3
+  let batchTimestampKey = payoutCtx._4
+  let maxIndividual = payoutCtx._5
+  let maxBatch = payoutCtx._6
+  let maxDaily = payoutCtx._7
+  let maxHourly = payoutCtx._8
+  
+  # 6. Validate Inputs
+  if (size(recipients) != size(amounts)) then 
+    throw("Recipients and amounts lists must be same size. Got " + 
+          toString(size(recipients)) + " recipients and " + toString(size(amounts)) + " amounts")
+  else if (size(recipients) > MAX_BATCH_SIZE) then 
+    throw("Batch size " + toString(size(recipients)) + " exceeds limit of " + toString(MAX_BATCH_SIZE))
+  else if (size(recipients) == 0) then throw("Batch cannot be empty")
+  else
+  
+  # 7. FOLD Logic: Validate, Sum, Aggregate
+  func foldStep(acc: (Int, List[Address], List[String], List[Int], Int), recipientAddrStr: String) = {
+    let (currentTotal, uniqueRecipients, recipientKeys, aggregatedTotals, idx) = acc
+    let amount = amounts[idx]
+    
+    if (amount < 0) then 
+      throw("Negative amount detected at index " + toString(idx) + ": " + toString(amount))
+    else if (amount == 0) then (currentTotal, uniqueRecipients, recipientKeys, aggregatedTotals, idx + 1) # Skip zero amounts
+    else
+      let recipient = match addressFromString(recipientAddrStr) {
+        case addr:Address => addr
+        case _ => throw("Invalid address at index " + toString(idx) + ": " + recipientAddrStr)
+      }
+      let newTotal = currentTotal + amount
+      if (newTotal < currentTotal) then 
+        throw("Integer overflow detected at index " + toString(idx) + ". Total would be: " + toString(newTotal))
+      else {
+        let recipientKey = toString(recipient)
+        match indexOf(recipientKeys, recipientKey) {
+          case pos:Int =>
+            let updatedRecipientAmount = aggregatedTotals[pos] + amount
+            if (updatedRecipientAmount > maxIndividual) then
+              throw("Per-recipient limit exceeded for " + recipientAddrStr + ". " +
+                    "Total for this address: " + toString(updatedRecipientAmount / 100000000) + " tokens, " +
+                    "Limit: " + toString(maxIndividual / 100000000) + " tokens")
+            else
+              let updatedTotals = replaceIntAt(aggregatedTotals, pos, updatedRecipientAmount)
+              (newTotal, uniqueRecipients, recipientKeys, updatedTotals, idx + 1)
+          case _ =>
+            if (amount > maxIndividual) then
+              throw("Per-recipient limit exceeded for " + recipientAddrStr + ". " +
+                    "Amount: " + toString(amount / 100000000) + " tokens, " +
+                    "Limit: " + toString(maxIndividual / 100000000) + " tokens")
+            else
+              (newTotal, uniqueRecipients :+ recipient, recipientKeys :+ recipientKey, aggregatedTotals :+ amount, idx + 1)
+        }
+      }
+  }
+  
+  let (totalAmount, aggregatedRecipients, _unusedKeys, aggregatedTotals, _unusedIdx) = FOLD<20>(recipients, (0, [], [], [], 0), foldStep)
+  
+  func foldTransfers(acc: (List[ScriptTransfer], Int), recipientAddr: Address) = {
+    let (currentTransfers, idx) = acc
+    let transferAmount = aggregatedTotals[idx]
+    (currentTransfers :+ ScriptTransfer(recipientAddr, transferAmount, tokenId), idx + 1)
+  }
+  
+  let (transfers, _transferIdx) = FOLD<20>(aggregatedRecipients, ([], 0), foldTransfers)
+  
+  if (totalAmount <= 0) then throw("Total amount must be positive")
+  else if (totalAmount > maxBatch) then 
+    throw("Batch amount " + toString(totalAmount / 100000000) + " tokens exceeds limit of " + 
+          toString(maxBatch / 100000000) + " tokens")
+  else
+  
+  # 8. Process Global Limits (Daily, Hourly, Anomaly)
+  let limitEntries = processGlobalLimits(totalAmount, maxDaily, maxHourly)
+  
+  # 10. Overflow Check (Global)
+  let previousDist = match getInteger(this, KEY_TOTAL_DISTRIBUTED) {
+    case val:Int => val
+    case _ => 0
+  }
+  if (previousDist + totalAmount < previousDist) then 
+    throw("Integer overflow detected. Total would be: " + toString(previousDist + totalAmount))
+  else
+
+  # 11. Balance Check
+  let contractBalance = assetBalance(this, tokenId)
+  if (contractBalance < totalAmount) then 
+    throw("Insufficient contract balance. Available: " + toString(contractBalance / 100000000) + 
+          " tokens, Requested: " + toString(totalAmount / 100000000) + " tokens")
+  else
+  
+  # 12. Execute Transfers and Update State
+  let previousPayouts = match getInteger(this, KEY_TOTAL_PAYOUTS) {
+    case val:Int => val
+    case _ => 0
+  }
+  let recipientCount = size(transfers)
+  if (recipientCount == 0) then throw("Total amount must be positive")
+  else
+  let batchSizeKey = KEY_BATCH_STATS_PREFIX + toString(recipientCount)
+
+  transfers ++ [
+    BooleanEntry(batchKey, true),
+    IntegerEntry(batchTimestampKey, lastBlock.timestamp),
+    IntegerEntry("batch_ts_" + batchId, lastBlock.timestamp),
+    IntegerEntry(KEY_TOTAL_DISTRIBUTED, previousDist + totalAmount),
+    IntegerEntry(KEY_TOTAL_PAYOUTS, previousPayouts + recipientCount),
+    IntegerEntry(KEY_LAST_PAYOUT, lastBlock.timestamp),
+    IntegerEntry(batchSizeKey, match getInteger(this, batchSizeKey) {
+      case val:Int => val
+      case _ => 0
+    } + 1)
+  ] ++ limitEntries
+}
+
+# ----------------- ADMIN / SECURITY -----------------
+
+@Callable(i)
+func pause() = {
+  if (i.callerPublicKey != getAdminPubKey()) then
+    throw("Only admin can pause the contract")
+  else
+  let tokenId = getTokenId()
+  [
+    BooleanEntry(KEY_PAUSED, true),
+    IntegerEntry(KEY_EMERGENCY_SNAPSHOT, assetBalance(this, tokenId)),
+    IntegerEntry(KEY_EMERGENCY_WITHDRAWN, 0)  # v2.14: Shared counter for both emergencyWithdraw and migrateToNewContract
+  ]
+}
+
+@Callable(i)
+func unpause() = {
+  if (i.callerPublicKey != getAdminPubKey()) then
+    throw("Only admin can unpause the contract")
+  else
+  [
+    BooleanEntry(KEY_PAUSED, false),
+    DeleteEntry(KEY_EMERGENCY_SNAPSHOT),
+    DeleteEntry(KEY_EMERGENCY_WITHDRAWN)
+  ]
+}
+
+@Callable(i)
+func emergencyWithdraw(amount: Int) = {
+  # Allow admin to withdraw tokens in emergency (e.g., if contract needs to be migrated)
+  # v2.11: Limited to MAX_EMERGENCY_WITHDRAWAL_PERCENT per call + 1 hour rate limit
+  if (i.callerPublicKey != getAdminPubKey()) then
+    throw("Only admin can emergency withdraw")
+  else
+  if (!(match getBoolean(this, KEY_PAUSED) {
+    case val:Boolean => val
+    case _ => false
+  })) then
+    throw("Contract must be paused for emergency withdrawal")
+  else
+  
+  # v2.11: Time-based rate limit (1 hour between withdrawals)
+  let lastEmergencyTs = match getInteger(this, KEY_LAST_EMERGENCY_WITHDRAW_TS) {
+    case val:Int => val
+    case _ => 0
+  }
+  strict _rateLimit = if (lastEmergencyTs > 0) then {
+    let elapsed = lastBlock.timestamp - lastEmergencyTs
+    if (elapsed < MIN_EMERGENCY_INTERVAL) then
+      throw("Emergency withdrawals limited to once per hour. " +
+            "Last withdrawal: " + toString(elapsed / 1000) + " seconds ago. " +
+            "Wait " + toString((MIN_EMERGENCY_INTERVAL - elapsed) / 1000) + " more seconds.")
+    else unit
+  } else unit
+  
+  let tokenId = getTokenId()
+  let currentBalance = assetBalance(this, tokenId)
+  let snapshotBalance = match getInteger(this, KEY_EMERGENCY_SNAPSHOT) {
+    case val:Int => val
+    case _ => 0
+  }
+  if (snapshotBalance <= 0) then 
+    throw("Pause snapshot missing. Pause contract again to refresh limits")
+  else
+  
+  let maxWithdrawal = percentOf(snapshotBalance, MAX_EMERGENCY_WITHDRAWAL_PERCENT)
+  let alreadyWithdrawn = match getInteger(this, KEY_EMERGENCY_WITHDRAWN) {
+    case val:Int => val
+    case _ => 0
+  }
+  let remainingCapacity = maxWithdrawal - alreadyWithdrawn
+  
+  if (amount <= 0) then
+    throw("Amount must be positive")
+  else if (amount > currentBalance) then
+    throw("Insufficient balance. " + 
+          "Current: " + toString(currentBalance / 100000000) + " tokens, " +
+          "Requested: " + toString(amount / 100000000) + " tokens")
+  else if (alreadyWithdrawn + amount > maxWithdrawal) then
+    throw("Emergency withdrawal limited to " + toString(MAX_EMERGENCY_WITHDRAWAL_PERCENT) + 
+          "% of snapshot (" + toString(snapshotBalance / 100000000) + " tokens). " +
+          "Already withdrawn: " + toString(alreadyWithdrawn / 100000000) + " tokens. " +
+          "Remaining capacity: " + toString(remainingCapacity / 100000000) + " tokens. " +
+          "Current balance: " + toString(currentBalance / 100000000) + " tokens. " +
+          "Requested: " + toString(amount / 100000000) + " tokens")
+  else
+  
+  [
+    ScriptTransfer(i.caller, amount, tokenId),
+    IntegerEntry(KEY_EMERGENCY_WITHDRAWN, alreadyWithdrawn + amount),
+    IntegerEntry(KEY_LAST_EMERGENCY_WITHDRAW_TS, lastBlock.timestamp)  # v2.11: Track timing
+  ]
+}
+
+@Callable(i)
+func migrateToNewContract(newContractAddress: String, amount: Int) = {
+  # v2.14: Safe migration path to new contract version
+  # Now uses same 25% per-cycle limit as emergencyWithdraw for security
+  if (i.callerPublicKey != getAdminPubKey()) then
+    throw("Only admin can migrate funds")
+  else
+  if (!(match getBoolean(this, KEY_PAUSED) {
+    case val:Boolean => val
+    case _ => false
+  })) then
+    throw("Contract must be paused before migration. Call pause() first.")
+  else
+  
+  # v2.14: Time-based rate limit (1 hour between migrations) - same as emergency withdraw
+  let lastMigrationTs = match getInteger(this, KEY_MIGRATION_TIMESTAMP) {
+    case val:Int => val
+    case _ => 0
+  }
+  strict _migrationRateLimit = if (lastMigrationTs > 0) then {
+    let elapsed = lastBlock.timestamp - lastMigrationTs
+    if (elapsed < MIN_MIGRATION_INTERVAL) then
+      throw("Migrations limited to once per hour. " +
+            "Last migration: " + toString(elapsed / 1000) + " seconds ago. " +
+            "Wait " + toString((MIN_MIGRATION_INTERVAL - elapsed) / 1000) + " more seconds.")
+    else unit
+  } else unit
+  
+  let tokenId = getTokenId()
+  let currentBalance = assetBalance(this, tokenId)
+  let newContract = match addressFromString(newContractAddress) {
+    case addr:Address => addr
+    case _ => throw("Invalid new contract address: " + newContractAddress)
+  }
+  
+  if (amount <= 0) then
+    throw("Migration amount must be positive")
+  else if (amount > currentBalance) then
+    throw("Insufficient balance for migration. " +
+          "Available: " + toString(currentBalance / 100000000) + " tokens, " +
+          "Requested: " + toString(amount / 100000000) + " tokens")
+  else
+  
+  # Check if this is a reasonable migration target (basic validation)
+  let addressPrefix = take(newContractAddress, 2)
+  if (addressPrefix != "3P" && addressPrefix != "3N") then
+    throw("Invalid Waves address format. Must start with 3P (mainnet) or 3N (testnet)")
+  else
+  
+  # v2.14: Apply same 25% per-cycle limit as emergencyWithdraw (using shared counter)
+  let snapshotBalance = match getInteger(this, KEY_EMERGENCY_SNAPSHOT) {
+    case val:Int => val
+    case _ => 0
+  }
+  if (snapshotBalance <= 0) then 
+    throw("Pause snapshot missing. Call pause() to create snapshot before migration")
+  else
+  
+  let maxMigration = percentOf(snapshotBalance, MAX_EMERGENCY_WITHDRAWAL_PERCENT)
+  let alreadyWithdrawn = match getInteger(this, KEY_EMERGENCY_WITHDRAWN) {
+    case val:Int => val
+    case _ => 0
+  }
+  let remainingCapacity = maxMigration - alreadyWithdrawn
+  
+  if (alreadyWithdrawn + amount > maxMigration) then
+    throw("Migration + Withdrawals limited to " + toString(MAX_EMERGENCY_WITHDRAWAL_PERCENT) + 
+          "% of snapshot (" + toString(snapshotBalance / 100000000) + " tokens) per pause cycle. " +
+          "Already consumed: " + toString(alreadyWithdrawn / 100000000) + " tokens. " +
+          "Remaining capacity: " + toString(remainingCapacity / 100000000) + " tokens. " +
+          "Requested: " + toString(amount / 100000000) + " tokens. " +
+          "Call unpause() then pause() to reset the cycle.")
+  else
+  
+  [
+    ScriptTransfer(newContract, amount, tokenId),
+    StringEntry(KEY_MIGRATION_TARGET, newContractAddress),
+    IntegerEntry(KEY_MIGRATION_TIMESTAMP, lastBlock.timestamp),
+    IntegerEntry(KEY_EMERGENCY_WITHDRAWN, alreadyWithdrawn + amount),  # Increment shared counter
+    IntegerEntry("migration_amount_last", amount)
+  ]
+}
+
+@Callable(i)
+func getStats() = {
+  # Public view function to query contract statistics
+  let tokenId = getTokenId()
+  let currentDay = getCurrentDay()
+  let (_storedDay, dailyDist) = getPeriodState(KEY_DAILY_STATE_DAY, KEY_DAILY_STATE_AMOUNT, currentDay)
+  
+  (
+    [],
+    (
+      match getInteger(this, KEY_TOTAL_DISTRIBUTED) {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_TOTAL_PAYOUTS) {
+        case val:Int => val
+        case _ => 0
+      },
+      assetBalance(this, tokenId),
+      dailyDist,
+      match getBoolean(this, KEY_PAUSED) {
+        case val:Boolean => val
+        case _ => false
+      },
+      match getInteger(this, KEY_LAST_PAYOUT) {
+        case val:Int => val
+        case _ => 0
+      },
+      match getString(this, KEY_VERSION) {
+        case val:String => val
+        case _ => "unknown"
+      },
+      currentDay
+    )
+  )
+}
+
+@Callable(i)
+func getHealth() = {
+  # Enhanced public view function for comprehensive health monitoring and alerting
+  let tokenId = getTokenId()
+  let balance = assetBalance(this, tokenId)
+  let currentDay = getCurrentDay()
+  let currentHour = getCurrentHour()
+  let (_storedDay, dailyDist) = getPeriodState(KEY_DAILY_STATE_DAY, KEY_DAILY_STATE_AMOUNT, currentDay)
+  let (_storedHour, hourlyDist) = getPeriodState(KEY_HOURLY_STATE_HOUR, KEY_HOURLY_STATE_AMOUNT, currentHour)
+  let isPaused = match getBoolean(this, KEY_PAUSED) {
+    case val:Boolean => val
+    case _ => false
+  }
+  
+  # Calculate usage percentages (scaled by 100 to avoid decimals)
+  let dailyUsedPercent = if (getMaxDailyDistribution() > 0) then (dailyDist * 100) / getMaxDailyDistribution() else 0
+  let hourlyUsedPercent = if (getMaxHourlyDistribution() > 0) then (hourlyDist * 100) / getMaxHourlyDistribution() else 0
+  
+  # Remaining capacity
+  let dailyRemaining = getMaxDailyDistribution() - dailyDist
+  let hourlyRemaining = getMaxHourlyDistribution() - hourlyDist
+  
+  # Low balance warning threshold (less than 2x daily max)
+  let lowBalanceWarning = balance < (getMaxDailyDistribution() * 2)
+  
+  # Payout interval check
+  let lastPayout = match getInteger(this, KEY_LAST_PAYOUT) {
+    case val:Int => val
+    case _ => 0
+  }
+  let timeSinceLastPayout = if (lastPayout == 0) then 0 else lastBlock.timestamp - lastPayout
+  let canPayoutNow = (lastPayout == 0) || (timeSinceLastPayout >= MIN_PAYOUT_INTERVAL)
+  
+  (
+    [],
+    (
+      balance,                  # 1. Current token balance
+      dailyUsedPercent,         # 2. Daily limit used (0-100%)
+      hourlyUsedPercent,        # 3. Hourly limit used (0-100%)
+      isPaused,                 # 4. Pause state
+      lowBalanceWarning,        # 5. Low balance alert
+      currentDay,               # 6. Current day number
+      currentHour,              # 7. Current hour number
+      canPayoutNow,             # 8. Can process payout now?
+      dailyRemaining,           # 9. Tokens remaining today
+      hourlyRemaining,          # 10. Tokens remaining this hour
+      timeSinceLastPayout       # 11. Milliseconds since last payout
+    )
+  )
+}
+
+@Callable(i)
+func getOracleConfig() = {
+  # Public view function to check oracle configuration
+  # Single oracle mode
+  let legacyOracle = match getString(this, KEY_ORACLE_ADDRESS) {
+    case val:String => val
+    case _ => ""
+  }
+
+  (
+    [],
+    (
+      1,                       # 1. Number of oracles (always 1)
+      1,                       # 2. Required signatures (always 1)
+      0,                       # 3. Oracle version (not used)
+      legacyOracle,            # 4. Single oracle address
+      false                    # 5. Is multisig mode enabled? (always false)
+    )
+  )
+}
+
+@Callable(i)
+func getBatchAnalytics() = {
+  # Public view function to retrieve batch size distribution
+  # Returns count of payouts grouped by number of recipients (1-10)
+  # Useful for oracle optimization and capacity planning
+  (
+    [],
+    (
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "1") {
+        case val:Int => val
+        case _ => 0
+      },   # 1. Single-recipient payouts
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "2") {
+        case val:Int => val
+        case _ => 0
+      },   # 2. 2-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "3") {
+        case val:Int => val
+        case _ => 0
+      },   # 3. 3-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "4") {
+        case val:Int => val
+        case _ => 0
+      },   # 4. 4-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "5") {
+        case val:Int => val
+        case _ => 0
+      },   # 5. 5-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "6") {
+        case val:Int => val
+        case _ => 0
+      },   # 6. 6-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "7") {
+        case val:Int => val
+        case _ => 0
+      },   # 7. 7-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "8") {
+        case val:Int => val
+        case _ => 0
+      },   # 8. 8-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "9") {
+        case val:Int => val
+        case _ => 0
+      },   # 9. 9-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "10") {
+        case val:Int => val
+        case _ => 0
+      },   # 10. 10-recipient batches
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "11") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "12") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "13") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "14") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "15") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "16") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "17") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "18") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "19") {
+        case val:Int => val
+        case _ => 0
+      },
+      match getInteger(this, KEY_BATCH_STATS_PREFIX + "20") {
+        case val:Int => val
+        case _ => 0
+      }
+    )
+  )
+}
+
+@Callable(i)
+func getBatchStatus(batchId: String) = {
+  # ✨ NEW in v2.9: Query batch processing status
+  # Public view function to check if a batch ID has been processed
+  # Useful for oracle pre-flight checks to avoid failed transactions
+  # 
+  # Returns:
+  # - isProcessed: true if this batch has already been paid out
+  # - timestamp: when the batch was processed (0 if not processed)
+  # - oracleVersion: current oracle version (for replay protection context)
+  let batchKey = getBatchKey(batchId)
+  let timestampKey = getBatchTimestampKey(batchId)
+  let isProcessed = match getBoolean(this, batchKey) {
+    case val:Boolean => val
+    case _ => false
+  }
+  let timestamp =
+    match getInteger(this, timestampKey) {
+      case ts:Int => ts
+      case _ =>
+        match getInteger(this, "batch_ts_" + batchId) {
+          case legacy:Int => legacy
+          case _ => 0
+        }
+    }
+  (
+    [],
+    (
+      isProcessed,        # 1. Has this batch been processed?
+      timestamp,          # 2. When was it processed (ms)?
+      0                   # 3. Oracle version (not used in single oracle mode)
+    )
+  )
+}
+
+@Callable(i)
+func getRateLimitStatus() = {
+  # ✨ NEW in v2.9: Query current rate limit status
+  # Public view function to check rate limit capacity before attempting payout
+  # Prevents wasted gas on transactions that would fail due to rate limits
+  # 
+  # Returns:
+  # - dailyRemaining: tokens that can still be distributed today
+  # - hourlyRemaining: tokens that can still be distributed this hour
+  # - intervalWaitMs: milliseconds until next payout allowed (0 if ready now)
+  # - dailyUsed: tokens already distributed today
+  # - hourlyUsed: tokens already distributed this hour
+  # - canPayoutNow: true if interval check would pass
+  let currentDay = getCurrentDay()
+  let currentHour = getCurrentHour()
+  let (_storedDay, dailyDist) = getPeriodState(KEY_DAILY_STATE_DAY, KEY_DAILY_STATE_AMOUNT, currentDay)
+  let (_storedHour, hourlyDist) = getPeriodState(KEY_HOURLY_STATE_HOUR, KEY_HOURLY_STATE_AMOUNT, currentHour)
+  let lastPayout = match getInteger(this, KEY_LAST_PAYOUT) {
+    case val:Int => val
+    case _ => 0
+  }
+  let timeSinceLastPayout = if (lastPayout == 0) then 0 else lastBlock.timestamp - lastPayout
+  
+  let dailyRemaining = getMaxDailyDistribution() - dailyDist
+  let hourlyRemaining = getMaxHourlyDistribution() - hourlyDist
+  let intervalWaitMs = if (lastPayout == 0 || timeSinceLastPayout >= MIN_PAYOUT_INTERVAL) 
+    then 0 
+    else MIN_PAYOUT_INTERVAL - timeSinceLastPayout
+  let canPayoutNow = intervalWaitMs == 0
+  
+  (
+    [],
+    (
+      dailyRemaining,      # 1. Tokens remaining today
+      hourlyRemaining,     # 2. Tokens remaining this hour
+      intervalWaitMs,      # 3. Wait time in milliseconds (0 = ready)
+      dailyDist,           # 4. Tokens used today
+      hourlyDist,          # 5. Tokens used this hour
+      canPayoutNow         # 6. Can payout now? (boolean)
+    )
+  )
+}
+
+
+@Callable(i)
+func updateLimits(newMaxDaily: Int, newMaxHourly: Int, newMaxIndividual: Int, newMaxBatch: Int) = {
+  if (i.callerPublicKey != getAdminPubKey()) then
+    throw("Only admin can update limits")
+  else
+  
+  # v2.14: Strict bounds checking to prevent accidental misconfiguration
+  if (newMaxDaily < MIN_DAILY_LIMIT) then
+    throw("Daily limit too low. Minimum: " + toString(MIN_DAILY_LIMIT / 100000000) + " tokens, " +
+          "Requested: " + toString(newMaxDaily / 100000000) + " tokens")
+  else if (newMaxDaily > MAX_DAILY_LIMIT) then
+    throw("Daily limit too high. Maximum: " + toString(MAX_DAILY_LIMIT / 100000000) + " tokens, " +
+          "Requested: " + toString(newMaxDaily / 100000000) + " tokens")
+  else if (newMaxHourly < MIN_HOURLY_LIMIT) then
+    throw("Hourly limit too low. Minimum: " + toString(MIN_HOURLY_LIMIT / 100000000) + " tokens, " +
+          "Requested: " + toString(newMaxHourly / 100000000) + " tokens")
+  else if (newMaxHourly > MAX_HOURLY_LIMIT) then
+    throw("Hourly limit too high. Maximum: " + toString(MAX_HOURLY_LIMIT / 100000000) + " tokens, " +
+          "Requested: " + toString(newMaxHourly / 100000000) + " tokens")
+  else if (newMaxIndividual < MIN_INDIVIDUAL_LIMIT) then
+    throw("Individual limit too low. Minimum: " + toString(MIN_INDIVIDUAL_LIMIT / 100000000) + " tokens, " +
+          "Requested: " + toString(newMaxIndividual / 100000000) + " tokens")
+  else if (newMaxIndividual > MAX_INDIVIDUAL_LIMIT) then
+    throw("Individual limit too high. Maximum: " + toString(MAX_INDIVIDUAL_LIMIT / 100000000) + " tokens, " +
+          "Requested: " + toString(newMaxIndividual / 100000000) + " tokens")
+  else if (newMaxBatch < MIN_BATCH_LIMIT) then
+    throw("Batch limit too low. Minimum: " + toString(MIN_BATCH_LIMIT / 100000000) + " tokens, " +
+          "Requested: " + toString(newMaxBatch / 100000000) + " tokens")
+  else if (newMaxBatch > MAX_BATCH_LIMIT) then
+    throw("Batch limit too high. Maximum: " + toString(MAX_BATCH_LIMIT / 100000000) + " tokens, " +
+          "Requested: " + toString(newMaxBatch / 100000000) + " tokens")
+  # v2.14: Logical consistency checks
+  else if (newMaxHourly > newMaxDaily) then
+    throw("Hourly limit cannot exceed daily limit. " +
+          "Hourly: " + toString(newMaxHourly / 100000000) + ", Daily: " + toString(newMaxDaily / 100000000))
+  else if (newMaxIndividual > newMaxBatch) then
+    throw("Individual limit cannot exceed batch limit. " +
+          "Individual: " + toString(newMaxIndividual / 100000000) + ", Batch: " + toString(newMaxBatch / 100000000))
+  else if (newMaxBatch > newMaxHourly) then
+    throw("Batch limit cannot exceed hourly limit. " +
+          "Batch: " + toString(newMaxBatch / 100000000) + ", Hourly: " + toString(newMaxHourly / 100000000))
+  else
+    [
+      IntegerEntry(KEY_MAX_DAILY_DISTRIBUTION, newMaxDaily),
+      IntegerEntry(KEY_MAX_HOURLY_DISTRIBUTION, newMaxHourly),
+      IntegerEntry(KEY_MAX_INDIVIDUAL_AMOUNT, newMaxIndividual),
+      IntegerEntry(KEY_MAX_BATCH_AMOUNT, newMaxBatch)
+    ]
+}
+
+@Verifier(tx)
+func verify() = {
+  # Simplified verifier: Only check admin OR legacy single oracle
+  let adminKey = getString(this, KEY_ADMIN_PUBKEY)
+  match adminKey {
+    case adminStr:String =>
+      let adminPK = fromBase58String(adminStr)
+      let adminSigned = proofForKeyExists(tx.bodyBytes, tx.proofs, adminPK)
+
+      if (adminSigned) then true
+      else
+        match tx {
+          case inv:InvokeScriptTransaction =>
+            # Simple legacy oracle check
+            legacyOracleMatches(inv.sender)
+          case _ => throw("Transaction type not allowed. Only InvokeScriptTransaction permitted")
+        }
+    case _ =>
+      # Contract not initialized - allow setScript signed by account owner for initial setup
+      match tx {
+        case stx:SetScriptTransaction => sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
+        case itx:InvokeScriptTransaction =>
+          # Allow init() call before admin is set, but only if caller matches sender
+          if (itx.function == "init") then sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
+          else throw("Admin public key not configured. Contract must be initialized first.")
+    case _ => throw("Admin public key not configured. Contract must be initialized")
+      }
+  }
+}
+
+

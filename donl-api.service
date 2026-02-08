@@ -1,0 +1,32 @@
+[Unit]
+Description=d.onl Production FastAPI Application
+After=network.target postgresql.service clickhouse-server.service
+Wants=postgresql.service clickhouse-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/var/www/html/d.onl
+Environment="PATH=/var/www/html/d.onl/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/var/www/html/d.onl"
+Environment="APP_ENV=production"
+ExecStart=/var/www/html/d.onl/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4 --log-level info --access-log
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=donl-api
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/html/d.onl/logs
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

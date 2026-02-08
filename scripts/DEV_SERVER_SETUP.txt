@@ -1,0 +1,100 @@
+================================================================================
+DEV.D.ONL — что залить и что сделать на сервере
+================================================================================
+
+--- 1. КУДА И КАКИЕ ФАЙЛЫ ЗАЛИВАТЬ ---
+
+Заливать нужно только ПРОДАКШЕННЫЙ каталог на VPS: /var/www/html/d.onl
+
+Способ A (рекомендуется): git
+  - На своей машине: git push (все изменения уже в репозитории).
+  - На сервере:
+    cd /var/www/html/d.onl
+    git pull
+  После этого в d.onl будут все актуальные файлы (d.onl.dev, скрипты, правки в database/, config/, oracle/, requirements.txt и т.д.).
+
+Способ B: залить вручную только изменённые файлы в /var/www/html/d.onl
+  Убедиться, что на сервере в /var/www/html/d.onl есть и актуальны:
+  - d.onl                    (конфиг nginx для prod)
+  - d.onl.dev                (конфиг nginx для dev)
+  - .gitattributes           (eol=lf для *.sh и d.onl.dev)
+  - .env                     (с APP_ENV=production — опционально)
+  - config/config.py         (APP_ENV, is_development)
+  - database/postgresql.py   (strip \r в env, логирование ошибок)
+  - database/repository.py   (сообщение об ошибке PG)
+  - oracle/main.py           (выход при APP_ENV=development)
+  - scripts/setup_dev_server.sh
+  - scripts/fix_scripts_on_server.sh
+  - scripts/run_payout_scheduler.py, run_promotion_renewal.py, run_domain_processor.py, run_hourly_rewards.py  (проверка APP_ENV)
+  - scripts/ssl/renew_certificates.py (проверка APP_ENV)
+  - requirements.txt         (pywaves-ce вместо PyWaves)
+
+В /var/www/html/dev.d.onl ничего отдельно заливать не нужно: он заполняется скриптом setup_dev_server.sh копированием из d.onl (или уже заполнен при первом запуске).
+
+
+--- 2. ПЕРВИЧНАЯ НАСТРОЙКА DEV (один раз) ---
+
+2.1. DNS
+  - A-запись: dev.d.onl → IP вашего VPS.
+
+2.2. На сервере: исправить переводы строк и права в scripts (если деплой с Windows)
+  cd /var/www/html/d.onl
+  find scripts -name "*.sh" -exec sed -i 's/\r$//' {} \;
+  find scripts -name "*.sh" -exec chmod +x {} \;
+
+2.3. SSL-сертификат для dev.d.onl
+  sudo certbot certonly -d dev.d.onl --webroot -w /var/www/html/certbot-webroot
+
+2.4. Развернуть dev (скопировать файлы, создать БД, .env, venv)
+  cd /var/www/html/d.onl
+  bash scripts/setup_dev_server.sh
+
+2.5. Nginx: включить конфиг для dev
+  sudo cp /var/www/html/d.onl/d.onl.dev /etc/nginx/sites-available/dev.d.onl
+  sudo ln -sf ../sites-available/dev.d.onl /etc/nginx/sites-enabled/
+  sudo nginx -t && sudo systemctl reload nginx
+
+2.6. Права на .env dev, чтобы PHP (www-data) мог читать
+  sudo chmod 640 /var/www/html/dev.d.onl/.env
+  sudo chown ubuntu:www-data /var/www/html/dev.d.onl/.env
+
+2.7. (Опционально) Проверить, что в dev venv есть psycopg2
+  /var/www/html/dev.d.onl/venv/bin/pip list | grep -i psycopg
+  Если нет:
+  /var/www/html/dev.d.onl/venv/bin/pip install psycopg2-binary
+
+
+--- 3. ПОСЛЕ ОБНОВЛЕНИЯ КОДА (когда что-то меняли в репозитории) ---
+
+3.1. Обновить prod
+  cd /var/www/html/d.onl
+  git pull   # или залить изменённые файлы в d.onl
+
+3.2. Обновить dev из prod (перезалить файлы, не трогая .env и БД)
+  rsync -a --delete \
+    --exclude='.git' --exclude='venv' --exclude='node_modules' --exclude='logs' \
+    --exclude='.env' --exclude='__pycache__' --exclude='*.pyc' --exclude='.cursor' \
+    --exclude='migrations/data_export' \
+    /var/www/html/d.onl/ /var/www/html/dev.d.onl/
+
+  Либо снова запустить setup_dev_server.sh — тогда пересоздастся и .env, и копия БД (см. шаг 2.4).
+
+3.3. Если правили только .sh — снова исправить переводы строк (если нужно)
+  find /var/www/html/d.onl/scripts -name "*.sh" -exec sed -i 's/\r$//' {} \;
+
+
+--- 4. ЧТО НЕ ДЕЛАТЬ НА DEV ---
+
+  - Не добавлять в crontab задачи для /var/www/html/dev.d.onl.
+  - Не запускать systemd-сервис oracle для dev (только для prod).
+  На dev все планировщики (oracle, payout, promotion_renewal и т.д.) при APP_ENV=development сами выходят без выполнения.
+
+
+--- 5. ПРОВЕРКА ---
+
+  - Открыть https://dev.d.onl
+  - Рейтинг доменов: https://dev.d.onl/rating или https://dev.d.onl/api/domains/rating?page=1&per_page=5
+  - Если пусто: проверить в dev БД количество доменов с is_mining=TRUE:
+    psql -h localhost -U domain_user -d domain_mining_dev -c "SELECT is_mining, COUNT(*) FROM domains GROUP BY is_mining;"
+
+================================================================================

@@ -1,0 +1,28 @@
+[Unit]
+Description=d.onl Development FastAPI Application
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/var/www/html/dev.d.onl
+Environment="PATH=/var/www/html/dev.d.onl/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/var/www/html/dev.d.onl"
+ExecStart=/var/www/html/dev.d.onl/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 2 --log-level info
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dev-donl-api
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

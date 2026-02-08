@@ -1,0 +1,14 @@
+{
+  "name": "podo-test-suite",
+  "version": "1.0.0",
+  "description": "Seed-independent validation tests for PoDO smart contract",
+  "main": "podo_test.js",
+  "scripts": {
+    "test": "mocha podo_test.js --timeout 10000"
+  },
+  "dependencies": {
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "fs": "^0.0.1-security"
+  }
+}
