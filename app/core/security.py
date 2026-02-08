@@ -7,7 +7,7 @@ import hashlib
 import logging
 import secrets
 import struct
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 import jwt
@@ -55,7 +55,7 @@ class SecurityManager:
         Returns:
             Encoded JWT string
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if token_type == "refresh":
             # Refresh tokens last 60 days
             expires_at = now + timedelta(days=60)

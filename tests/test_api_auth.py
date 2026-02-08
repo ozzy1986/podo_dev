@@ -126,6 +126,90 @@ class TestLoginEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/v1/auth/login-wallet
+# ---------------------------------------------------------------------------
+
+class TestLoginWalletEndpoint:
+
+    def test_login_wallet_success(self, client, test_app, mock_pg_db, sample_user):
+        """Wallet login with valid signature returns tokens."""
+        from app.api.deps import get_auth_service
+        from unittest.mock import AsyncMock
+
+        mock_auth = MagicMock()
+        mock_auth.login_with_wallet = AsyncMock(return_value={
+            "token": "access.jwt",
+            "refresh_token": "refresh.jwt",
+            "user": {**sample_user},
+        })
+        test_app.dependency_overrides[get_auth_service] = lambda: mock_auth
+
+        resp = client.post("/api/v1/auth/login-wallet", json={
+            "wallet_address": "3N7KEH73pBRE4HZ83PX91uj9Kf6fG4dLEjW",
+            "signature": "base58signature",
+            "public_key": "base58pubkey",
+            "message": "signed message",
+        })
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["token"] == "access.jwt"
+        assert body["refresh_token"] == "refresh.jwt"
+        assert body["user"]["id"] == sample_user["id"]
+        test_app.dependency_overrides.pop(get_auth_service, None)
+
+    def test_login_wallet_auth_error(self, client, test_app, sample_user):
+        """Wallet login with invalid signature returns 401."""
+        from app.api.deps import get_auth_service
+        from app.core.exceptions import AuthError
+        from unittest.mock import AsyncMock
+
+        mock_auth = MagicMock()
+        mock_auth.login_with_wallet = AsyncMock(side_effect=AuthError("Invalid signature"))
+        test_app.dependency_overrides[get_auth_service] = lambda: mock_auth
+
+        resp = client.post("/api/v1/auth/login-wallet", json={
+            "wallet_address": "3N7KEH73pBRE4HZ83PX91uj9Kf6fG4dLEjW",
+            "signature": "bad",
+            "public_key": "bad",
+            "message": "msg",
+        })
+
+        assert resp.status_code == 401
+        test_app.dependency_overrides.pop(get_auth_service, None)
+
+    def test_login_wallet_missing_fields(self, client):
+        """Missing required fields returns 422."""
+        resp = client.post("/api/v1/auth/login-wallet", json={
+            "wallet_address": "3N7KEH73pBRE4HZ83PX91uj9Kf6fG4dLEjW",
+        })
+        assert resp.status_code == 422
+
+    def test_login_wallet_wallet_data_alias(self, client, test_app, sample_user):
+        """Wallet login accepts wallet/data (WX format) instead of wallet_address/message."""
+        from app.api.deps import get_auth_service
+        from unittest.mock import AsyncMock
+
+        mock_auth = MagicMock()
+        mock_auth.login_with_wallet = AsyncMock(return_value={
+            "token": "t",
+            "refresh_token": "r",
+            "user": {**sample_user},
+        })
+        test_app.dependency_overrides[get_auth_service] = lambda: mock_auth
+
+        resp = client.post("/api/v1/auth/login-wallet", json={
+            "wallet": "3N7KEH73pBRE4HZ83PX91uj9Kf6fG4dLEjW",
+            "signature": "sig",
+            "public_key": "pk",
+            "data": "signed data",
+        })
+
+        assert resp.status_code == 200
+        test_app.dependency_overrides.pop(get_auth_service, None)
+
+
+# ---------------------------------------------------------------------------
 # POST /api/v1/auth/refresh
 # ---------------------------------------------------------------------------
 

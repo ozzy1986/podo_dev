@@ -180,14 +180,15 @@ class TestRefreshTokens:
     async def test_expired_refresh_token(self, auth_service, security_manager):
         """Expired refresh token raises AuthError."""
         import jwt as pyjwt
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
+        now = datetime.now(timezone.utc)
         expired_payload = {
             "user_id": 1,
             "wallet": None,
             "type": "refresh",
-            "iat": datetime.utcnow() - timedelta(days=90),
-            "exp": datetime.utcnow() - timedelta(days=1),
+            "iat": now - timedelta(days=90),
+            "exp": now - timedelta(days=1),
         }
         expired_tok = pyjwt.encode(
             expired_payload,

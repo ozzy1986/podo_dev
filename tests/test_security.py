@@ -96,7 +96,8 @@ class TestJWT:
 
     def test_expired_token_raises(self, sm: SecurityManager, settings: SecuritySettings):
         """Create a token that is already expired and ensure it raises."""
-        now = datetime.utcnow()
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         payload = {
             "user_id": 1,
             "wallet": None,

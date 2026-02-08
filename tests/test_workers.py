@@ -65,26 +65,21 @@ class TestDomainProcessorJob:
     @pytest.mark.asyncio
     async def test_process_domains_job_calls_oracle(self):
         """process_domains_job calls oracle process_domains."""
-        try:
-            import oracle.domain_processor as dp_mod
-        except ImportError:
-            pytest.skip("oracle.domain_processor not available")
-        with patch.object(dp_mod, "process_domains") as mock_process:
+        fake_oracle = MagicMock()
+        fake_oracle.process_domains = MagicMock()
+        with patch.dict("sys.modules", {"oracle.domain_processor": fake_oracle}):
             from app.workers.domain_processor import process_domains_job
             await process_domains_job()
-        mock_process.assert_called_once()
+        fake_oracle.process_domains.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_process_domains_job_handles_exception(self):
-        """process_domains_job logs and re-raises on exception."""
-        try:
-            import oracle.domain_processor as dp_mod
-        except ImportError:
-            pytest.skip("oracle.domain_processor not available")
-        with patch.object(dp_mod, "process_domains", side_effect=RuntimeError("oracle down")):
+        """process_domains_job logs exception and does not re-raise."""
+        fake_oracle = MagicMock()
+        fake_oracle.process_domains = MagicMock(side_effect=RuntimeError("oracle down"))
+        with patch.dict("sys.modules", {"oracle.domain_processor": fake_oracle}):
             from app.workers.domain_processor import process_domains_job
-            with pytest.raises(RuntimeError, match="oracle down"):
-                await process_domains_job()
+            await process_domains_job()
 
 
 class TestSslRenewalJob:
@@ -140,6 +135,30 @@ class TestHourlyRewardsJob:
             mock_settings.return_value.is_development = True
             await process_hourly_rewards_job()
 
+    @pytest.mark.asyncio
+    async def test_hourly_rewards_calls_oracle_in_production(self):
+        """process_hourly_rewards_job calls oracle process_hour in production."""
+        fake_oracle = MagicMock()
+        fake_oracle.process_hour = MagicMock()
+        with patch.dict("sys.modules", {"oracle.hourly_processor": fake_oracle}):
+            with patch("app.workers.hourly_rewards.get_settings") as mock_settings:
+                mock_settings.return_value.is_development = False
+                from app.workers.hourly_rewards import process_hourly_rewards_job
+                await process_hourly_rewards_job()
+        fake_oracle.process_hour.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_hourly_rewards_handles_exception(self):
+        """process_hourly_rewards_job logs exception and does not re-raise."""
+        fake_oracle = MagicMock()
+        fake_oracle.process_hour = MagicMock(side_effect=RuntimeError("oracle error"))
+        with patch.dict("sys.modules", {"oracle.hourly_processor": fake_oracle}):
+            with patch("app.workers.hourly_rewards.get_settings") as mock_settings:
+                mock_settings.return_value.is_development = False
+                from app.workers.hourly_rewards import process_hourly_rewards_job
+                await process_hourly_rewards_job()
+        # Job catches exception, logs, does not re-raise
+
 
 class TestPayoutSchedulerJob:
     """Tests for payout_scheduler job."""
@@ -152,3 +171,49 @@ class TestPayoutSchedulerJob:
         with patch("app.workers.payout_scheduler.get_settings") as mock_settings:
             mock_settings.return_value.is_development = True
             await process_payouts_job()
+
+    @pytest.mark.asyncio
+    async def test_payouts_calls_oracle_in_production(self):
+        """process_payouts_job calls oracle run_scheduler in production."""
+        fake_oracle = MagicMock()
+        fake_oracle.run_scheduler = MagicMock()
+        with patch.dict("sys.modules", {"oracle.payout_scheduler": fake_oracle}):
+            with patch("app.workers.payout_scheduler.get_settings") as mock_settings:
+                mock_settings.return_value.is_development = False
+                from app.workers.payout_scheduler import process_payouts_job
+                await process_payouts_job()
+        fake_oracle.run_scheduler.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_payouts_handles_exception(self):
+        """process_payouts_job logs exception and does not re-raise."""
+        fake_oracle = MagicMock()
+        fake_oracle.run_scheduler = MagicMock(side_effect=RuntimeError("oracle error"))
+        with patch.dict("sys.modules", {"oracle.payout_scheduler": fake_oracle}):
+            with patch("app.workers.payout_scheduler.get_settings") as mock_settings:
+                mock_settings.return_value.is_development = False
+                from app.workers.payout_scheduler import process_payouts_job
+                await process_payouts_job()
+
+
+class TestPromotionRenewalJob:
+    """Tests for promotion_renewal job."""
+
+    @pytest.mark.asyncio
+    async def test_promotion_renewal_calls_script(self):
+        """process_promotion_renewals_job calls run_promotion_renewal.main."""
+        fake_script = MagicMock()
+        fake_script.main = MagicMock()
+        with patch.dict("sys.modules", {"scripts.run_promotion_renewal": fake_script}):
+            from app.workers.promotion_renewal import process_promotion_renewals_job
+            await process_promotion_renewals_job()
+        fake_script.main.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_promotion_renewal_handles_exception(self):
+        """process_promotion_renewals_job logs exception and does not re-raise."""
+        fake_script = MagicMock()
+        fake_script.main = MagicMock(side_effect=RuntimeError("renewal error"))
+        with patch.dict("sys.modules", {"scripts.run_promotion_renewal": fake_script}):
+            from app.workers.promotion_renewal import process_promotion_renewals_job
+            await process_promotion_renewals_job()

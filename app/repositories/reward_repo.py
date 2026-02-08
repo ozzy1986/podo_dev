@@ -5,7 +5,7 @@ All ClickHouse calls use async wrappers to avoid blocking the event loop.
 
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.repositories.base import BaseRepository
 from app.db.clickhouse import ClickHouseDatabase
@@ -69,7 +69,7 @@ class RewardRepository(BaseRepository):
             'amount': amount,
             'amount_units': amount_units,
             'status': 'pending',
-            'created_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),
         }]
 
         await self.ch_db.async_insert('rewards_log', data)
