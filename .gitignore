@@ -15,6 +15,9 @@ build/
 .env
 .env.local
 
+# Local-only agent instructions (VPS dev access; do not commit)
+DEV_VPS_ACCESS.md
+
 # IDE
 .vscode/
 .idea/
