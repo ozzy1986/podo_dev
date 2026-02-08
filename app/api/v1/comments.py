@@ -102,10 +102,10 @@ async def get_comment(
 
 @router.post("/comments", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def create_comment(
+    request: CreateCommentRequest,
     entity_type: str = Query(...),
     entity_id: Optional[int] = Query(None),
     entity_key: Optional[str] = Query(None),
-    request: CreateCommentRequest,
     current_user: dict = Depends(get_current_user),
     repo: CommentRepository = Depends(get_comment_repo),
 ):
@@ -156,10 +156,10 @@ async def delete_comment(
 
 @router.post("/votes", response_model=dict)
 async def set_vote(
+    request: SetVoteRequest,
     target_type: str = Query(...),
     target_id: Optional[int] = Query(None),
     target_key: Optional[str] = Query(None),
-    request: SetVoteRequest,
     current_user: dict = Depends(get_current_user),
     repo: CommentRepository = Depends(get_comment_repo),
 ):
