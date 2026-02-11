@@ -66,6 +66,7 @@ async def get_public_domain_by_name(
     out = _serialize(dict(row))
     domain_id = out["id"]
     out["karma"] = await comment_repo.get_entity_karma("domain", domain_id, None)
+    out["comments_count"] = await comment_repo.count_comments("domain", domain_id, None)
     out["user_vote"] = await comment_repo.get_user_vote(
         current_user["id"], "domain", domain_id, None
     ) if current_user else None

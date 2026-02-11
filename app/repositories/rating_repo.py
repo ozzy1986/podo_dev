@@ -97,6 +97,7 @@ class RatingRepository(BaseRepository):
 
         offset = (page - 1) * per_page
         karma_select = ", (SELECT COALESCE(SUM(v.value * COALESCE(v.amount, 1)), 0)::int FROM votes v WHERE v.target_type = 'domain' AND v.target_id = d.id) AS karma"
+        comments_count_select = ", (SELECT COUNT(*)::int FROM comments c WHERE c.entity_type = 'domain' AND c.entity_id = d.id AND c.parent_id IS NULL AND c.moderation_status = 'approved') AS comments_count"
         if user_id is not None:
             params.extend([per_page, offset, user_id])
             user_vote_select = f", (SELECT v.value FROM votes v WHERE v.user_id = ${idx + 2} AND v.target_type = 'domain' AND v.target_id = d.id LIMIT 1) AS user_vote"
@@ -109,6 +110,7 @@ class RatingRepository(BaseRepository):
                    d.is_clickable, d.a_record_points_to_us, d.promoted_at, d.user_id, u.wallet,
                    d.creation_date, d.verification_time
                    {karma_select}
+                   {comments_count_select}
                    {user_vote_select}
             FROM domains d
             JOIN users u ON d.user_id = u.id
@@ -124,6 +126,7 @@ class RatingRepository(BaseRepository):
             else:
                 it["user_vote"] = None
             it.setdefault("karma", 0)
+            it.setdefault("comments_count", 0)
 
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
@@ -156,6 +159,7 @@ class RatingRepository(BaseRepository):
 
         offset = (page - 1) * per_page
         karma_select = ", (SELECT COALESCE(SUM(v.value * COALESCE(v.amount, 1)), 0)::int FROM votes v WHERE v.target_type = 'domain' AND v.target_id = d.id) AS karma"
+        comments_count_select = ", (SELECT COUNT(*)::int FROM comments c WHERE c.entity_type = 'domain' AND c.entity_id = d.id AND c.parent_id IS NULL AND c.moderation_status = 'approved') AS comments_count"
         if user_id is not None:
             params.extend([per_page, offset, user_id])
             user_vote_select = f", (SELECT v.value FROM votes v WHERE v.user_id = ${idx + 2} AND v.target_type = 'domain' AND v.target_id = d.id LIMIT 1) AS user_vote"
@@ -169,6 +173,7 @@ class RatingRepository(BaseRepository):
                    d.is_clickable, d.a_record_points_to_us, d.promoted_at, d.user_id, u.wallet,
                    d.creation_date, d.verification_time
                    {karma_select}
+                   {comments_count_select}
                    {user_vote_select}
             FROM domains d
             JOIN users u ON d.user_id = u.id
@@ -186,6 +191,7 @@ class RatingRepository(BaseRepository):
             else:
                 it["user_vote"] = None
             it.setdefault("karma", 0)
+            it.setdefault("comments_count", 0)
 
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 

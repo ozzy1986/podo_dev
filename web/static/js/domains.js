@@ -145,6 +145,9 @@
                                 <span class="domain-karma-val">${typeof data.karma === 'number' ? data.karma : 0}</span>
                                 <small class="text-muted" data-i18n="login_to_vote">Log in to vote</small>
                             `}
+                            <span class="text-muted mx-2" aria-hidden="true">·</span>
+                            <span class="text-muted me-1" data-i18n="comments">Comments</span>
+                            <span class="domain-comments-count">${typeof data.comments_count === 'number' ? data.comments_count : 0}</span>
                         </div>
                     </div>
                     

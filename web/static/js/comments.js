@@ -56,6 +56,9 @@
         const self = this;
         api.getComments(entityType, entityId, entityKey, page, 50).then(function(data) {
             const comments = data.comments || [];
+            const total = typeof data.total === 'number' ? data.total : comments.length;
+            var countEl = document.querySelector('.domain-comments-count');
+            if (countEl) countEl.textContent = total;
             if (comments.length === 0) {
                 listEl.innerHTML = '<p class="text-muted small mb-0" data-i18n="no_comments">No comments yet.</p>';
                 if (typeof app !== 'undefined' && app.updateI18n) app.updateI18n();
