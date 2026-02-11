@@ -385,6 +385,42 @@ body {
     margin: 0;
 }
 
+.wall-card .wall-posts-list .wall-post-item {
+    border: 1px solid var(--border-color, #dee2e6);
+}
+
+.wall-vote-buttons .btn {
+    width: 2.4rem;
+    margin-bottom: 0.25rem;
+}
+
+.wall-vote-buttons .btn.active {
+    background-color: var(--primary-color, #0d6efd);
+    color: #fff;
+}
+
+.wall-post-body img,
+.wall-post-body video,
+.wall-post-body iframe {
+    max-width: 100%;
+    height: auto;
+}
+
+.wall-post-body table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.wall-post-body table td,
+.wall-post-body table th {
+    border: 1px solid var(--border-color, #dee2e6);
+    padding: 0.5rem;
+}
+
+.wall-post-hidden {
+    font-size: 0.9rem;
+}
+
 /* Navbar dark theme support */
 [data-theme="dark"] .navbar {
     background-color: #1e1e1e !important;

@@ -151,6 +151,8 @@
                         </span>
                     </div>
                     
+                    <div id="domain-wall-container" class="mt-4"></div>
+
                     <div id="domain-comments-container" class="mt-4"></div>
                     
                     <div class="mt-4 text-center">
@@ -161,7 +163,8 @@
             
             this.updateI18n();
             if (data.id != null) {
-                this.renderCommentsBlock('domain-comments-container', 'domain', data.id, null);
+                this.renderWallSection('domain-wall-container', 'domain', data.id, null, { title: (typeof i18n !== 'undefined' && i18n.t) ? (i18n.t('domain_wall_title') || 'Domain Wall') : 'Domain Wall' });
+                this.renderCommentsBlock('domain-comments-container', 'domain', data.id, null, { countSelector: '.domain-comments-count' });
             }
             var self = this;
             var domainId = data.id;

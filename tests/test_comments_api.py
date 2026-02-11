@@ -5,7 +5,13 @@ Tests for comments and votes API: create comment (auto-like), set_vote, block di
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.api.deps import get_comment_repo, get_domain_repo, get_current_user, get_user_repo
+from app.api.deps import (
+    get_comment_repo,
+    get_domain_repo,
+    get_current_user,
+    get_user_repo,
+    get_wall_post_repo,
+)
 from app.core.exceptions import PaidVoteRequiredError
 
 
@@ -150,6 +156,7 @@ async def test_set_vote_like_own_comment_allowed(client, test_app, auth_headers_
     """Liking your own comment is allowed (e.g. after create)."""
     mock_comment_repo.get_comment.return_value = {"id": 5, "author_id": sample_user["id"]}
     mock_comment_repo.set_vote.return_value = {"value": 1}
+    mock_comment_repo.get_entity_karma.return_value = 10
     test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
     test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
 
@@ -161,10 +168,43 @@ async def test_set_vote_like_own_comment_allowed(client, test_app, auth_headers_
         )
         assert resp.status_code == 200
         assert resp.json().get("value") == 1
+        assert resp.json().get("karma") == 10
         mock_comment_repo.set_vote.assert_called_once()
     finally:
         test_app.dependency_overrides.pop(get_comment_repo, None)
         test_app.dependency_overrides.pop(get_domain_repo, None)
+
+
+@pytest.mark.asyncio
+async def test_set_vote_dislike_own_wall_post_returns_400(
+    client,
+    test_app,
+    auth_headers_comments,
+    mock_comment_repo,
+    mock_domain_repo,
+    mock_wall_post_repo,
+    sample_user,
+):
+    """Disliking your own wall post returns 400."""
+    mock_wall_post_repo.get_post.return_value = {"id": 9, "author_id": sample_user["id"]}
+    test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
+    test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
+    test_app.dependency_overrides[get_wall_post_repo] = lambda: mock_wall_post_repo
+
+    try:
+        resp = client.post(
+            "/api/v1/votes?target_type=wall_post&target_id=9&value=-1",
+            json={"value": -1},
+            headers=auth_headers_comments,
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert "wall post" in (body.get("detail") or body.get("error") or "").lower()
+        mock_comment_repo.set_vote.assert_not_called()
+    finally:
+        test_app.dependency_overrides.pop(get_comment_repo, None)
+        test_app.dependency_overrides.pop(get_domain_repo, None)
+        test_app.dependency_overrides.pop(get_wall_post_repo, None)
 
 
 def _assert_409_paid_vote_envelope(resp, body):

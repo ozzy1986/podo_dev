@@ -10,10 +10,18 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 
-from app.api.deps import get_comment_repo, get_domain_repo, get_current_user, get_current_user_optional, get_user_repo
+from app.api.deps import (
+    get_comment_repo,
+    get_domain_repo,
+    get_current_user,
+    get_current_user_optional,
+    get_user_repo,
+    get_wall_post_repo,
+)
 from app.repositories.comment_repo import CommentRepository
 from app.repositories.domain_repo import DomainRepository
 from app.repositories.user_repo import UserRepository
+from app.repositories.wall_post_repo import WallPostRepository
 from app.models.comment import CreateCommentRequest, SetVoteRequest, CommentResponse
 from app.core.exceptions import NotFoundError, BadRequestError, PermissionError as AppPermissionError, PaidVoteRequiredError
 
@@ -174,6 +182,7 @@ async def set_vote(
     repo: CommentRepository = Depends(get_comment_repo),
     domain_repo: DomainRepository = Depends(get_domain_repo),
     user_repo: UserRepository = Depends(get_user_repo),
+    wall_post_repo: WallPostRepository = Depends(get_wall_post_repo),
 ):
     """Set like (+1) or dislike (-1). Free path: amount omitted (one free vote). Paid path: amount sent (>= 1) deducts tokens. Returns 409 with code PAID_VOTE_REQUIRED when free vote already used in this direction."""
     if request.value == -1:
@@ -185,6 +194,10 @@ async def set_vote(
             domain = await domain_repo.get_by_id(target_id)
             if domain and domain.get("user_id") == current_user["id"]:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot dislike your own domain")
+        if target_type == "wall_post" and target_id is not None:
+            post = await wall_post_repo.get_post(target_id, current_user["id"])
+            if post and post.get("author_id") == current_user["id"]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot dislike your own wall post")
 
     # Explicit amount in body = paid vote (including 1). Omit amount = free vote only.
     use_paid_path = request.amount is not None
@@ -227,7 +240,15 @@ async def set_vote(
         raise e
     except BadRequestError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    return {"ok": True, "target_type": target_type, "target_id": target_id, "target_key": target_key, "value": row["value"]}
+    karma = await repo.get_entity_karma(target_type, target_id, target_key)
+    return {
+        "ok": True,
+        "target_type": target_type,
+        "target_id": target_id,
+        "target_key": target_key,
+        "value": row["value"],
+        "karma": karma,
+    }
 
 
 @router.delete("/votes", status_code=status.HTTP_204_NO_CONTENT)

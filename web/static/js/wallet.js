@@ -62,10 +62,14 @@
                             `}
                         </div>
                     </div>
+                    <div id="wallet-wall-container" class="mt-4"></div>
                 </div>
             </div>
         `;
         this.updateI18n();
+        if (wallet) {
+            this.renderWallSection('wallet-wall-container', 'wallet', null, wallet, { title: (typeof i18n !== 'undefined' && i18n.t) ? (i18n.t('wallet_wall_title') || 'Wall') : 'Wall' });
+        }
     };
 
     App.prototype.showWithdraw = async function() {

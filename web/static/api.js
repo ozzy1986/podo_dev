@@ -460,6 +460,29 @@ class API {
     async getUserKarma() {
         return this.request('/user/karma');
     }
+
+    // Wall posts
+    async getWallPosts(entityType, entityId, entityKey, page = 1, perPage = 10) {
+        let url = `/wall/posts?entity_type=${encodeURIComponent(entityType)}&page=${page}&per_page=${perPage}`;
+        if (entityId != null) url += `&entity_id=${entityId}`;
+        if (entityKey) url += `&entity_key=${encodeURIComponent(entityKey)}`;
+        return this.request(url);
+    }
+
+    async createWallPost(entityType, entityId, entityKey, body, contentTheme = 'light') {
+        let url = `/wall/posts?entity_type=${encodeURIComponent(entityType)}`;
+        if (entityId != null) url += `&entity_id=${entityId}`;
+        if (entityKey) url += `&entity_key=${encodeURIComponent(entityKey)}`;
+        const payload = {
+            body: body,
+            content_theme: contentTheme
+        };
+        return this.request(url, { method: 'POST', body: JSON.stringify(payload) });
+    }
+
+    async deleteWallPost(postId) {
+        return this.request(`/wall/posts/${postId}`, { method: 'DELETE' });
+    }
 }
 
 // Export singleton instance

@@ -158,6 +158,19 @@ def mock_domain_repo():
 
 
 @pytest.fixture
+def mock_wall_post_repo():
+    """Return a mock WallPostRepository with async methods stubbed."""
+    repo = MagicMock()
+    repo.create_post = AsyncMock()
+    repo.list_posts = AsyncMock(return_value=[])
+    repo.count_posts = AsyncMock(return_value=0)
+    repo.get_post = AsyncMock(return_value=None)
+    repo.delete_post = AsyncMock(return_value=True)
+    repo.assert_post_exists = AsyncMock()
+    return repo
+
+
+@pytest.fixture
 def mock_payout_repo():
     """Return a mock PayoutRepository for user API tests."""
     repo = MagicMock()
@@ -237,7 +250,14 @@ def client(test_app):
 
 
 @pytest.fixture
-def auth_headers(test_app, sample_user, mock_user_repo, mock_domain_repo, mock_payout_repo):
+def auth_headers(
+    test_app,
+    sample_user,
+    mock_user_repo,
+    mock_domain_repo,
+    mock_payout_repo,
+    mock_wall_post_repo,
+):
     """
     Generate auth headers for unit tests.
 
@@ -249,18 +269,21 @@ def auth_headers(test_app, sample_user, mock_user_repo, mock_domain_repo, mock_p
         get_user_repo,
         get_domain_repo,
         get_payout_repo,
+        get_wall_post_repo,
     )
 
     test_app.dependency_overrides[get_current_user] = lambda: sample_user
     test_app.dependency_overrides[get_user_repo] = lambda: mock_user_repo
     test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
     test_app.dependency_overrides[get_payout_repo] = lambda: mock_payout_repo
+    test_app.dependency_overrides[get_wall_post_repo] = lambda: mock_wall_post_repo
     mock_user_repo.get_by_id = AsyncMock(return_value=sample_user)
     yield {"Authorization": "Bearer test-token"}
     test_app.dependency_overrides.pop(get_current_user, None)
     test_app.dependency_overrides.pop(get_user_repo, None)
     test_app.dependency_overrides.pop(get_domain_repo, None)
     test_app.dependency_overrides.pop(get_payout_repo, None)
+    test_app.dependency_overrides.pop(get_wall_post_repo, None)
 
 
 # ---------------------------------------------------------------------------

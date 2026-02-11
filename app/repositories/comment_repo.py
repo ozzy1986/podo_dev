@@ -10,8 +10,8 @@ from app.core.exceptions import NotFoundError, ConflictError, BadRequestError, P
 
 logger = logging.getLogger(__name__)
 
-ENTITY_TYPES = frozenset(("domain", "wallet", "registrar", "hoster", "zone"))
-VOTE_TARGET_TYPES = frozenset(("comment", "domain", "registrar", "hoster", "zone", "wallet"))
+ENTITY_TYPES = frozenset(("domain", "wallet", "registrar", "hoster", "zone", "wall_post"))
+VOTE_TARGET_TYPES = frozenset(("comment", "domain", "registrar", "hoster", "zone", "wallet", "wall_post"))
 MODERATION_STATUSES = frozenset(("pending", "approved", "rejected"))
 
 
@@ -26,13 +26,17 @@ def _entity_params(entity_type: str, entity_id: Optional[int], entity_key: Optio
         if not entity_key or not str(entity_key).strip():
             raise BadRequestError(f"{entity_type} requires entity_key")
         return (entity_type, None, str(entity_key).strip())
+    if entity_type == "wall_post":
+        if entity_id is None:
+            raise BadRequestError("wall_post requires entity_id")
+        return (entity_type, entity_id, None)
     raise BadRequestError(f"Invalid entity_type: {entity_type}")
 
 
 def _vote_target_params(target_type: str, target_id: Optional[int], target_key: Optional[str]) -> tuple:
     if target_type not in VOTE_TARGET_TYPES:
         raise BadRequestError(f"Invalid target_type: {target_type}")
-    if target_type in ("comment", "domain", "registrar", "hoster"):
+    if target_type in ("comment", "domain", "registrar", "hoster", "wall_post"):
         if target_id is None:
             raise BadRequestError(f"{target_type} vote requires target_id")
         return (target_type, target_id, None)

@@ -15,6 +15,7 @@ from app.repositories.reward_repo import RewardRepository
 from app.repositories.payout_repo import PayoutRepository
 from app.repositories.ssl_repo import SSLRepository
 from app.repositories.comment_repo import CommentRepository
+from app.repositories.wall_post_repo import WallPostRepository
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 from app.services.domain_service import DomainService
@@ -71,6 +72,11 @@ def get_ssl_repo(db: PostgreSQLDatabase = Depends(get_db)) -> SSLRepository:
 def get_comment_repo(db: PostgreSQLDatabase = Depends(get_db)) -> CommentRepository:
     """Get comment repository."""
     return CommentRepository(db)
+
+
+def get_wall_post_repo(db: PostgreSQLDatabase = Depends(get_db)) -> WallPostRepository:
+    """Get wall post repository."""
+    return WallPostRepository(db)
 
 
 # Security dependency

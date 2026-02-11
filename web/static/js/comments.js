@@ -5,33 +5,47 @@
 (function() {
     'use strict';
 
-    App.prototype.renderCommentsBlock = function(containerId, entityType, entityId, entityKey) {
-        const container = document.getElementById(containerId);
+    function entity_key_or_empty(key) {
+        return (key != null && String(key).trim() !== '') ? String(key) : '';
+    }
+
+    App.prototype.renderCommentsBlock = function(containerId, entityType, entityId, entityKey, options) {
+        options = options || {};
+        const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
         if (!container) return;
         const auth = !!api.token;
+        const placeholderText = (typeof i18n !== 'undefined' && i18n.t && i18n.t('write_comment')) ? i18n.t('write_comment') : 'Write a comment...';
+
+        container.dataset.entityType = entityType;
+        container.dataset.entityId = (entityId != null) ? String(entityId) : '';
+        container.dataset.entityKey = entity_key_or_empty(entityKey);
+        container.dataset.countSelector = options.countSelector || '';
+        container.dataset.perPage = options.perPage ? String(options.perPage) : '50';
+        container.dataset.page = '1';
+
         container.innerHTML = `
-            <div class="card">
+            <div class="card comments-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0" data-i18n="comments">Comments</h5>
-                    ${auth ? `<span class="badge bg-secondary" id="comments-karma-badge"></span>` : ''}
+                    ${auth ? `<span class="badge bg-secondary comment-karma-badge d-none"></span>` : ''}
                 </div>
                 <div class="card-body">
                     ${auth ? `
-                        <div class="mb-3">
-                            <textarea class="form-control" id="comment-body-input" rows="2" placeholder="${(typeof i18n !== 'undefined' && i18n.t('write_comment')) ? i18n.t('write_comment') : 'Write a comment...'}" maxlength="10000"></textarea>
-                            <button type="button" class="btn btn-primary btn-sm mt-2" id="comment-submit-btn" data-i18n="send">Send</button>
+                        <div class="mb-3 comment-form">
+                            <textarea class="form-control comment-body-input" rows="2" placeholder="${placeholderText}" maxlength="10000"></textarea>
+                            <button type="button" class="btn btn-primary btn-sm mt-2 comment-submit-btn" data-i18n="send">Send</button>
                         </div>
                     ` : '<p class="text-muted small" data-i18n="login_to_comment">Log in to comment.</p>'}
-                    <div id="comments-list"></div>
+                    <div class="comments-list"></div>
                 </div>
             </div>
         `;
         if (typeof app !== 'undefined' && app.updateI18n) app.updateI18n();
-        this.loadCommentsInto(containerId, entityType, entityId, entityKey);
+        this.loadCommentsInto(container, entityType, entityId, entityKey, 1);
         if (auth) {
             const self = this;
-            const submitBtn = document.getElementById('comment-submit-btn');
-            const bodyInput = document.getElementById('comment-body-input');
+            const submitBtn = container.querySelector('.comment-submit-btn');
+            const bodyInput = container.querySelector('.comment-body-input');
             if (submitBtn && bodyInput) {
                 submitBtn.addEventListener('click', function() {
                     const body = bodyInput.value.trim();
@@ -39,7 +53,7 @@
                     submitBtn.disabled = true;
                     api.createComment(entityType, entityId, entityKey, body, null).then(function() {
                         bodyInput.value = '';
-                        self.loadCommentsInto(containerId, entityType, entityId, entityKey);
+                        self.loadCommentsInto(container, entityType, entityId, entityKey, 1);
                     }).catch(function(err) {
                         if (typeof app !== 'undefined' && app.showToast) app.showToast('danger', (err && err.message) || 'Failed to post');
                     }).finally(function() { submitBtn.disabled = false; });
@@ -48,17 +62,26 @@
         }
     };
 
-    App.prototype.loadCommentsInto = function(containerId, entityType, entityId, entityKey, page) {
-        page = page || 1;
-        const listEl = document.getElementById('comments-list');
+    App.prototype.loadCommentsInto = function(container, entityType, entityId, entityKey, page) {
+        container = typeof container === 'string' ? document.getElementById(container) : container;
+        if (!container) return;
+        const listEl = container.querySelector('.comments-list');
         if (!listEl) return;
+        const perPage = parseInt(container.dataset.perPage || '50', 10) || 50;
+        page = page || parseInt(container.dataset.page || '1', 10) || 1;
+        container.dataset.page = String(page);
+
         listEl.innerHTML = '<div class="text-muted small">Loading...</div>';
         const self = this;
-        api.getComments(entityType, entityId, entityKey, page, 50).then(function(data) {
+        api.getComments(entityType, entityId, entityKey, page, perPage).then(function(data) {
             const comments = data.comments || [];
             const total = typeof data.total === 'number' ? data.total : comments.length;
-            var countEl = document.querySelector('.domain-comments-count');
-            if (countEl) countEl.textContent = total;
+            const countSelector = container.dataset.countSelector;
+            if (countSelector) {
+                document.querySelectorAll(countSelector).forEach(function(el) {
+                    el.textContent = total;
+                });
+            }
             if (comments.length === 0) {
                 listEl.innerHTML = '<p class="text-muted small mb-0" data-i18n="no_comments">No comments yet.</p>';
                 if (typeof app !== 'undefined' && app.updateI18n) app.updateI18n();
@@ -68,8 +91,8 @@
                 return self.renderOneComment(c, entityType, entityId, entityKey);
             }).join('');
             if (typeof app !== 'undefined' && app.updateI18n) app.updateI18n();
-            self.attachCommentVoteHandlers(containerId, entityType, entityId, entityKey);
-            self.attachCommentWalletCopyHandlers();
+            self.attachCommentVoteHandlers(container, entityType, entityId, entityKey);
+            self.attachCommentWalletCopyHandlers(container);
         }).catch(function() {
             listEl.innerHTML = '<p class="text-muted small mb-0">Failed to load comments.</p>';
         });
@@ -118,10 +141,10 @@
         `;
     };
 
-    App.prototype.attachCommentWalletCopyHandlers = function() {
-        const listEl = document.getElementById('comments-list');
-        if (!listEl) return;
-        listEl.querySelectorAll('.comment-wallet-copy[data-wallet]').forEach(function(el) {
+    App.prototype.attachCommentWalletCopyHandlers = function(container) {
+        container = typeof container === 'string' ? document.getElementById(container) : container;
+        if (!container) return;
+        container.querySelectorAll('.comment-wallet-copy[data-wallet]').forEach(function(el) {
             el.style.cursor = 'pointer';
             el.addEventListener('click', function() {
                 const w = el.getAttribute('data-wallet');
@@ -151,19 +174,24 @@
         }
     };
 
-    App.prototype.attachCommentVoteHandlers = function(containerId, entityType, entityId, entityKey) {
-        const listEl = document.getElementById('comments-list');
+    App.prototype.attachCommentVoteHandlers = function(container, entityType, entityId, entityKey) {
+        container = typeof container === 'string' ? document.getElementById(container) : container;
+        if (!container) return;
+        const listEl = container.querySelector('.comments-list');
         if (!listEl) return;
         listEl.querySelectorAll('.vote-up, .vote-down').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 if (!api.token) return;
-                const commentId = parseInt(btn.closest('.comment-item').getAttribute('data-comment-id'), 10);
+                const commentItem = btn.closest('.comment-item');
+                if (!commentItem) return;
+                const commentId = parseInt(commentItem.getAttribute('data-comment-id'), 10);
+                if (!commentId) return;
                 const value = parseInt(btn.getAttribute('data-value'), 10);
-                const row = btn.closest('.comment-item');
+                const row = commentItem;
                 const karmaEl = row.querySelector('.karma-val');
                 const currentKarma = parseInt(karmaEl ? karmaEl.textContent : '0', 10) || 0;
                 const currentUserVote = row.querySelector('.vote-up.active') ? 1 : (row.querySelector('.vote-down.active') ? -1 : 0);
-                listEl.querySelectorAll('.paid-vote-form-wrap').forEach(function(f) { if (f.parentNode) f.parentNode.removeChild(f); });
+                container.querySelectorAll('.paid-vote-form-wrap').forEach(function(f) { if (f.parentNode) f.parentNode.removeChild(f); });
                 api.setVote('comment', commentId, null, value).then(function(res) {
                     const newKarma = res && res.karma != null ? res.karma : (currentKarma + value - currentUserVote);
                     if (karmaEl) karmaEl.textContent = newKarma;
