@@ -74,12 +74,25 @@ body {
     color: var(--text-muted);
 }
 
-/* Paid vote amount input: visible in dark theme (avoid dark-on-dark) */
+/* Paid vote amount input: visible in dark theme (lighter bg, placeholder like text) */
 .paid-vote-form-wrap .paid-vote-amount,
 .paid-vote-form-wrap .form-control.paid-vote-amount {
     background-color: var(--bg-color);
     color: var(--text-color);
     border-color: var(--border-color);
+}
+
+.paid-vote-form-wrap .paid-vote-amount::placeholder {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] .paid-vote-form-wrap .paid-vote-amount,
+[data-theme="dark"] .paid-vote-form-wrap .form-control.paid-vote-amount {
+    background-color: #2a2a2a;
+}
+
+[data-theme="dark"] .paid-vote-form-wrap .paid-vote-amount::placeholder {
+    color: var(--text-muted);
 }
 
 /* Full-width row used on rating table so form stays in viewport */
