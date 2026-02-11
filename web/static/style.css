@@ -33,6 +33,7 @@ body {
     color: var(--text-color);
     min-height: 100vh;
     transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-x: hidden;
 }
 
 .navbar-brand {
@@ -889,19 +890,25 @@ body {
     color: var(--text-color);
 }
 
+/* Theme-aware table header (override Bootstrap .table-dark) */
+.rating-table thead.table-dark th,
 .rating-table thead th {
     position: sticky;
     top: 0;
-    background-color: #212529;
-    color: #fff;
+    background-color: var(--bg-card) !important;
+    color: var(--text-color) !important;
     font-weight: 600;
     padding: 0.75rem 0.5rem;
     white-space: nowrap;
     border: none;
+    border-bottom: 2px solid var(--border-color);
 }
 
+[data-theme="dark"] .rating-table thead.table-dark th,
 [data-theme="dark"] .rating-table thead th {
-    background-color: #2d2d2d;
+    background-color: #2d2d2d !important;
+    color: var(--text-color) !important;
+    border-bottom-color: var(--border-color);
 }
 
 .rating-table tbody tr {
@@ -942,6 +949,18 @@ body {
     vertical-align: middle;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-color);
+}
+
+/* Votes + comments on one line in rating table */
+.rating-table .karma-col .rating-vote-block {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+}
+
+.rating-table .karma-col .rating-vote-block .rating-comments-count {
+    white-space: nowrap;
 }
 
 /* Column widths */
@@ -992,18 +1011,18 @@ body {
 }
 
 .rating-table th.sortable:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(0, 0, 0, 0.06);
 }
 
 [data-theme="dark"] .rating-table th.sortable:hover {
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
 .rating-table th.sortable .sort-indicator {
     margin-left: 0.5rem;
     font-size: 0.7em;
     opacity: 0.4;
-    color: #999;
+    color: var(--text-muted);
     transition: opacity 0.2s ease, color 0.2s ease;
 }
 
@@ -1013,7 +1032,6 @@ body {
 
 .rating-table th.sortable .sort-indicator.sort-active {
     opacity: 0.7;
-    color: #666;
 }
 
 [data-theme="dark"] .rating-table th.sortable .sort-indicator {
@@ -1123,6 +1141,16 @@ body {
     .rating-table .weight-col {
         width: 80px;
         min-width: 70px;
+    }
+    
+    /* Keep votes + comments on one line: min width for karma column */
+    .rating-table .karma-col {
+        min-width: 7rem;
+    }
+    
+    .rating-table .karma-col .btn-sm {
+        min-height: 2rem;
+        padding: 0.25rem 0.4rem;
     }
     
     /* Pagination on mobile */
@@ -1303,6 +1331,19 @@ body {
     /* Hide less important columns */
     .hide-xs {
         display: none !important;
+    }
+
+    /* Touch-friendly tap targets (min 44px) */
+    .navbar .nav-link,
+    .btn:not(.btn-sm) {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .rating-table .karma-col .btn-sm {
+        min-width: 2.25rem;
+        min-height: 2.25rem;
     }
 }
 
