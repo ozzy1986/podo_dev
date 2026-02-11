@@ -341,6 +341,7 @@
   "send": "Отправить",
   "paid_like": "Платный лайк",
   "paid_dislike": "Платный дизлайк",
+  "paid_vote_required": "Требуется платный голос",
   "paid_vote_amount_placeholder": "Количество (голосов)",
   "use_max_balance": "Максимум",
   "paid_vote_confirm": "Подтвердить",

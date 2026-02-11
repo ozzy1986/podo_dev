@@ -122,7 +122,9 @@
                     }
                 }).catch(function(err) {
                     submitBtn.disabled = false;
-                    showError(err && err.message ? err.message : 'Request failed');
+                    var isPaidVoteRequired = err && err.responseData && err.responseData.details && err.responseData.details.code === 'PAID_VOTE_REQUIRED';
+                    var msg = isPaidVoteRequired ? t('paid_vote_required', 'Paid vote required') : (err && err.message ? err.message : t('error', 'Request failed'));
+                    showError(msg);
                 });
             });
         }

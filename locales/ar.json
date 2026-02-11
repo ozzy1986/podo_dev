@@ -341,6 +341,7 @@
   "send": "إرسال",
   "paid_like": "إعجاب مدفوع",
   "paid_dislike": "عدم إعجاب مدفوع",
+  "paid_vote_required": "التصويت المدفوع مطلوب",
   "paid_vote_amount_placeholder": "المبلغ (الأصوات)",
   "use_max_balance": "الحد الأقصى",
   "paid_vote_confirm": "تأكيد",

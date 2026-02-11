@@ -341,6 +341,7 @@
   "send": "Send",
   "paid_like": "Paid like",
   "paid_dislike": "Paid dislike",
+  "paid_vote_required": "Paid vote required",
   "paid_vote_amount_placeholder": "Amount (votes)",
   "use_max_balance": "Use max",
   "paid_vote_confirm": "Confirm",
