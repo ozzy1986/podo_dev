@@ -951,16 +951,25 @@ body {
     color: var(--text-color);
 }
 
-/* Votes + comments on one line in rating table */
+/* Votes + comments on one line, compact so it fits in the column */
 .rating-table .karma-col .rating-vote-block {
     display: inline-flex;
     align-items: center;
     flex-wrap: nowrap;
-    gap: 0.35rem;
+    gap: 0.25rem;
+    max-width: 100%;
 }
 
 .rating-table .karma-col .rating-vote-block .rating-comments-count {
     white-space: nowrap;
+}
+
+.rating-table .karma-col .rating-vote-block .btn-sm {
+    padding: 0.2rem 0.35rem;
+}
+
+.rating-table .karma-col .rating-vote-block .small {
+    font-size: 0.75rem;
 }
 
 /* Column widths */
@@ -1003,20 +1012,10 @@ body {
     min-width: 80px;
 }
 
+/* Same width range as rating-col so column aligns with table */
 .rating-table .karma-col {
-    width: 160px;
-    min-width: 150px;
-}
-
-/* Likes column: prevent clipping, align header like other end columns */
-.rating-table thead th.karma-col {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-}
-
-.rating-table tbody td.karma-col {
-    overflow: visible;
+    width: 120px;
+    min-width: 110px;
 }
 
 /* Sortable headers */
@@ -1159,9 +1158,8 @@ body {
         min-width: 70px;
     }
     
-    /* Keep votes + comments on one line: ensure karma column not cut off */
     .rating-table .karma-col {
-        min-width: 150px;
+        min-width: 110px;
     }
     
     .rating-table .karma-col .btn-sm {
