@@ -41,7 +41,7 @@
                         bodyInput.value = '';
                         self.loadCommentsInto(containerId, entityType, entityId, entityKey);
                     }).catch(function(err) {
-                        if (typeof app !== 'undefined' && app.showToast) app.showToast((err && err.message) || 'Failed to post', 'danger');
+                        if (typeof app !== 'undefined' && app.showToast) app.showToast('danger', (err && err.message) || 'Failed to post');
                     }).finally(function() { submitBtn.disabled = false; });
                 });
             }
@@ -125,7 +125,7 @@
                 if (!w) return;
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(w).then(function() {
-                        if (typeof app !== 'undefined' && app.showToast) app.showToast((typeof i18n !== 'undefined' && i18n.t('copied_to_clipboard')) ? i18n.t('copied_to_clipboard') : 'Copied', 'success');
+                        if (typeof app !== 'undefined' && app.showToast) app.showToast('success', (typeof i18n !== 'undefined' && i18n.t('copied_to_clipboard')) ? i18n.t('copied_to_clipboard') : 'Copied');
                     }).catch(function() { fallbackCopy(w); });
                 } else {
                     fallbackCopy(w);
@@ -142,7 +142,7 @@
             ta.select();
             try {
                 document.execCommand('copy');
-                if (typeof app !== 'undefined' && app.showToast) app.showToast((typeof i18n !== 'undefined' && i18n.t('copied_to_clipboard')) ? i18n.t('copied_to_clipboard') : 'Copied', 'success');
+                if (typeof app !== 'undefined' && app.showToast) app.showToast('success', (typeof i18n !== 'undefined' && i18n.t('copied_to_clipboard')) ? i18n.t('copied_to_clipboard') : 'Copied');
             } catch (e) {}
             document.body.removeChild(ta);
         }
@@ -195,10 +195,10 @@
                                 }
                             });
                         } else {
-                            if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                            if (typeof app !== 'undefined' && app.showToast) app.showToast('danger', 'Vote failed');
                         }
                     } else {
-                        if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                        if (typeof app !== 'undefined' && app.showToast) app.showToast('danger', 'Vote failed');
                     }
                 });
             });

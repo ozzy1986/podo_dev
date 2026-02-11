@@ -118,7 +118,7 @@
                     removeFormAndRow();
                     onSuccess(res);
                     if (typeof app !== 'undefined' && app.showToast) {
-                        app.showToast(isLike ? (t('paid_like_done', 'Paid like applied')) : (t('paid_dislike_done', 'Paid dislike applied')), 'success');
+                        app.showToast('success', isLike ? (t('paid_like_done', 'Paid like applied')) : (t('paid_dislike_done', 'Paid dislike applied')));
                     }
                 }).catch(function(err) {
                     submitBtn.disabled = false;

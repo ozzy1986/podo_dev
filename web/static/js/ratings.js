@@ -437,10 +437,10 @@
                                 }
                             });
                         } else {
-                            if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                            if (typeof app !== 'undefined' && app.showToast) app.showToast('danger', 'Vote failed');
                         }
                     } else {
-                        if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                        if (typeof app !== 'undefined' && app.showToast) app.showToast('danger', 'Vote failed');
                     }
                 });
             });
