@@ -132,25 +132,23 @@
                         </div>
                     </div>
                     
-                    <div class="mt-4 domain-vote-block w-100">
-                        <div class="d-flex align-items-center flex-nowrap w-100" style="min-width: 0;">
-                            <span class="text-muted me-1 flex-shrink-0" data-i18n="domain_likes">Likes:</span>
-                            ${api.token ? `
-                                <div class="d-inline-flex align-items-center flex-shrink-0">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary domain-vote-up ${(data.user_vote === 1) ? 'active' : ''}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
-                                    <span class="d-inline-block text-center px-2 domain-karma-val" style="min-width: 2rem;">${typeof data.karma === 'number' ? data.karma : 0}</span>
-                                    ${(this.user && data.user_id === this.user.id) ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary domain-vote-down ${(data.user_vote === -1) ? 'active' : ''}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>`}
-                                </div>
-                            ` : `
-                                <span class="domain-karma-val flex-shrink-0">${typeof data.karma === 'number' ? data.karma : 0}</span>
-                                <small class="text-muted flex-shrink-0" data-i18n="login_to_vote">Log in to vote</small>
-                            `}
-                            <span class="flex-shrink-0 ms-3 d-inline-flex align-items-center gap-1 domain-comments-count-wrap">
-                                <i class="bi bi-chat-left-text text-muted small" aria-hidden="true" title="${(typeof i18n !== 'undefined' && i18n.t) ? i18n.t('comments') : 'Comments'}"></i>
-                                <span class="text-muted me-1" data-i18n="comments">Comments</span>
-                                <span class="domain-comments-count">${typeof data.comments_count === 'number' ? data.comments_count : 0}</span>
+                    <div class="mt-4 domain-vote-block domain-vote-oneline">
+                        <span class="text-muted me-1" data-i18n="domain_likes">Likes:</span>
+                        ${api.token ? `
+                            <span class="d-inline-block align-middle">
+                                <button type="button" class="btn btn-sm btn-outline-secondary domain-vote-up ${(data.user_vote === 1) ? 'active' : ''}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
+                                <span class="d-inline-block text-center px-2 domain-karma-val align-middle" style="min-width: 2rem;">${typeof data.karma === 'number' ? data.karma : 0}</span>
+                                ${(this.user && data.user_id === this.user.id) ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary domain-vote-down ${(data.user_vote === -1) ? 'active' : ''}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>`}
                             </span>
-                        </div>
+                        ` : `
+                            <span class="domain-karma-val">${typeof data.karma === 'number' ? data.karma : 0}</span>
+                            <small class="text-muted" data-i18n="login_to_vote">Log in to vote</small>
+                        `}
+                        <span class="ms-3 domain-comments-count-wrap">
+                            <i class="bi bi-chat-left-text text-muted small align-middle" aria-hidden="true" title="${(typeof i18n !== 'undefined' && i18n.t) ? i18n.t('comments') : 'Comments'}"></i>
+                            <span class="text-muted me-1" data-i18n="comments">Comments</span>
+                            <span class="domain-comments-count">${typeof data.comments_count === 'number' ? data.comments_count : 0}</span>
+                        </span>
                     </div>
                     
                     <div id="domain-comments-container" class="mt-4"></div>

@@ -260,12 +260,10 @@ body {
     border-top-color: var(--border-color);
 }
 
-/* Domain page: vote + comments row stays on one line, use full width */
-.domain-vote-block {
-    width: 100%;
-}
-.domain-vote-block > .d-flex {
-    width: 100%;
+/* Domain page: vote + comments forced on one line (no wrap) */
+.domain-vote-block.domain-vote-oneline {
+    white-space: nowrap;
+    overflow-x: auto;
 }
 
 /* Domain page (public /domain/*) - ensure dark theme applies to cards and content */
