@@ -75,3 +75,40 @@ def test_frontend_keys_exist_in_all_locales():
             f"{path.name} is missing keys used in frontend: {sorted(missing)}. "
             "Add them to all locale files to avoid console warnings."
         )
+
+
+# Keys where the same value as en is allowed (examples, codes, symbols, proper nouns)
+TRANSLATION_SAME_ALLOWLIST = {
+    "wallet_example",   # address format
+    "domain_example",   # example.com
+    "rank",             # "#" symbol
+    "wallet_command_example",  # /wallet YOUR_ADDRESS format
+    "domain_command_example",  # /adddomain format
+}
+
+
+def test_no_english_text_in_translated_locales():
+    """Non-English locales must not have the same value as en.json (catches untranslated copy-paste)."""
+    en_path = LOCALES_DIR / "en.json"
+    en = _load_locale(en_path)
+    files = [p for p in LOCALES_DIR.glob("*.json") if p.name != "en.json"]
+    assert files, "No non-en locale files"
+
+    errors = []
+    for path in files:
+        locale = _load_locale(path)
+        lang = path.stem
+        for key, en_val in en.items():
+            if key not in locale:
+                continue
+            loc_val = locale[key]
+            if loc_val != en_val:
+                continue
+            if key in TRANSLATION_SAME_ALLOWLIST:
+                continue
+            errors.append(f"{path.name} key {key!r}: value is same as en ({en_val[:50]!r}...)")
+
+    assert not errors, (
+        "These keys have the same value as English (likely untranslated). "
+        "Translate them or add to TRANSLATION_SAME_ALLOWLIST if intentional.\n  " + "\n  ".join(errors)
+    )
