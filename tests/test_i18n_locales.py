@@ -21,15 +21,19 @@ def _load_locale(path: Path) -> dict:
 
 
 def _get_frontend_i18n_keys() -> set:
-    """Extract all literal data-i18n and data-i18n-dynamic keys from web/ (HTML and JS)."""
+    """Extract all i18n keys from web/: data-i18n="key" and i18n.t('key') / i18n.t(\"key\")."""
     keys = set()
     # data-i18n="key" (literal key in quotes)
-    literal_re = re.compile(r'data-i18n=["\']([a-zA-Z0-9_]+)["\']')
-    # data-i18n="${...}" / data-i18n="' + key + '" - dynamic, skip or use known list
+    data_i18n_re = re.compile(r'data-i18n=["\']([a-zA-Z0-9_]+)["\']')
+    # i18n.t('key') or i18n.t("key") (placeholders, JS-driven strings)
+    i18n_t_re = re.compile(r"i18n\.t\s*\(\s*['\"]([a-zA-Z0-9_]+)['\"]\s*\)")
     for path in WEB_DIR.rglob("*.html"):
-        keys.update(literal_re.findall(path.read_text(encoding="utf-8")))
+        text = path.read_text(encoding="utf-8")
+        keys.update(data_i18n_re.findall(text))
     for path in WEB_DIR.rglob("*.js"):
-        keys.update(literal_re.findall(path.read_text(encoding="utf-8")))
+        text = path.read_text(encoding="utf-8")
+        keys.update(data_i18n_re.findall(text))
+        keys.update(i18n_t_re.findall(text))
     return keys
 
 
@@ -65,7 +69,7 @@ def test_locales_same_keys():
 
 
 def test_frontend_keys_exist_in_all_locales():
-    """Every key referenced in the frontend (data-i18n="key") exists in every locale file."""
+    """Every key used in the frontend (data-i18n or i18n.t) exists in every locale file."""
     frontend_keys = _get_frontend_i18n_keys()
     assert frontend_keys, "No data-i18n keys found in web/"
     for path in LOCALES_DIR.glob("*.json"):
