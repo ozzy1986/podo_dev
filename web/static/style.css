@@ -260,6 +260,14 @@ body {
     border-top-color: var(--border-color);
 }
 
+/* Domain page: vote + comments row stays on one line, use full width */
+.domain-vote-block {
+    width: 100%;
+}
+.domain-vote-block > .d-flex {
+    width: 100%;
+}
+
 /* Domain page (public /domain/*) - ensure dark theme applies to cards and content */
 [data-theme="dark"] .domain-page {
     color: var(--text-color);
