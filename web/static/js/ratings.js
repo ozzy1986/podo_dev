@@ -240,11 +240,12 @@
                 const uv = d.user_vote;
                 const upActive = uv === 1 ? ' active' : '';
                 const downActive = uv === -1 ? ' active' : '';
+                const isOwnDomain = this.user && d.user_id === this.user.id;
                 const likesCell = api.token
                     ? `<div class="d-inline-flex align-items-center justify-content-end">
                         <button type="button" class="btn btn-sm btn-outline-secondary rating-vote-up${upActive}" data-domain-id="${d.id}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
                         <span class="d-inline-block text-center px-1 rating-karma-val" style="min-width: 1.5rem;">${karmaVal}</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary rating-vote-down${downActive}" data-domain-id="${d.id}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>
+                        ${isOwnDomain ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary rating-vote-down${downActive}" data-domain-id="${d.id}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>`}
                        </div>`
                     : `<span class="rating-karma-val">${karmaVal}</span><small class="text-muted ms-1" data-i18n="login_to_vote">Log in to vote</small>`;
                 domainRows += `

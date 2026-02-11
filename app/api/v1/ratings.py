@@ -56,7 +56,7 @@ async def get_public_domain_by_name(
     if not domain:
         raise HTTPException(status_code=404, detail="Domain not found")
     row = await domain_repo.db.fetchrow(
-        "SELECT d.id, d.domain, d.sld_length, d.verified, d.is_mining, d.total_earnings, d.weight, "
+        "SELECT d.id, d.domain, d.user_id, d.sld_length, d.verified, d.is_mining, d.total_earnings, d.weight, "
         "d.creation_date, d.verification_time, d.description, d.parking_mode, d.parking_content, d.content_theme, u.wallet AS owner_wallet "
         "FROM domains d JOIN users u ON d.user_id = u.id WHERE d.domain = $1",
         domain_name,

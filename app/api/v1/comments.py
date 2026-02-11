@@ -10,8 +10,9 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 
-from app.api.deps import get_comment_repo, get_current_user, get_current_user_optional
+from app.api.deps import get_comment_repo, get_domain_repo, get_current_user, get_current_user_optional
 from app.repositories.comment_repo import CommentRepository
+from app.repositories.domain_repo import DomainRepository
 from app.models.comment import CreateCommentRequest, SetVoteRequest, CommentResponse
 from app.core.exceptions import NotFoundError, BadRequestError, PermissionError as AppPermissionError
 
@@ -109,7 +110,7 @@ async def create_comment(
     current_user: dict = Depends(get_current_user),
     repo: CommentRepository = Depends(get_comment_repo),
 ):
-    """Create a comment on an entity (or reply with parent_id). Default: moderation approved (comments pass)."""
+    """Create a comment on an entity (or reply with parent_id). Default: moderation approved (comments pass). Author gets an automatic like on their comment."""
     try:
         row = await repo.create_comment(
             author_id=current_user["id"],
@@ -120,9 +121,17 @@ async def create_comment(
             parent_id=request.parent_id,
             moderation_status="approved",
         )
+        await repo.set_vote(
+            user_id=current_user["id"],
+            target_type="comment",
+            target_id=row["id"],
+            target_key=None,
+            value=1,
+        )
+        comment = await repo.get_comment(row["id"])
+        return _serialize_comment(dict(comment) if comment else dict(row), 1)
     except BadRequestError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
-    return _serialize_comment(dict(row), None)
 
 
 @router.put("/comments/{comment_id}/moderation", response_model=dict)
@@ -162,8 +171,18 @@ async def set_vote(
     target_key: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
     repo: CommentRepository = Depends(get_comment_repo),
+    domain_repo: DomainRepository = Depends(get_domain_repo),
 ):
-    """Set like (+1) or dislike (-1) on a comment or entity. One vote per user per target."""
+    """Set like (+1) or dislike (-1) on a comment or entity. One vote per user per target. Author/owner cannot dislike their own comment/domain."""
+    if request.value == -1:
+        if target_type == "comment" and target_id is not None:
+            comment = await repo.get_comment(target_id)
+            if comment and comment.get("author_id") == current_user["id"]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot dislike your own comment")
+        if target_type == "domain" and target_id is not None:
+            domain = await domain_repo.get_by_id(target_id)
+            if domain and domain.get("user_id") == current_user["id"]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot dislike your own domain")
     try:
         row = await repo.set_vote(
             user_id=current_user["id"],

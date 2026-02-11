@@ -139,7 +139,7 @@
                                 <div class="d-inline-flex align-items-center">
                                     <button type="button" class="btn btn-sm btn-outline-secondary domain-vote-up ${(data.user_vote === 1) ? 'active' : ''}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
                                     <span class="d-inline-block text-center px-2 domain-karma-val" style="min-width: 2rem;">${typeof data.karma === 'number' ? data.karma : 0}</span>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary domain-vote-down ${(data.user_vote === -1) ? 'active' : ''}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>
+                                    ${(this.user && data.user_id === this.user.id) ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary domain-vote-down ${(data.user_vote === -1) ? 'active' : ''}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>`}
                                 </div>
                             ` : `
                                 <span class="domain-karma-val">${typeof data.karma === 'number' ? data.karma : 0}</span>

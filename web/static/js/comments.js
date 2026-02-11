@@ -78,13 +78,14 @@
         const uv = c.user_vote != null ? c.user_vote : null;
         const upActive = uv === 1 ? ' active' : '';
         const downActive = uv === -1 ? ' active' : '';
+        const isOwnComment = (typeof app !== 'undefined' && app.user && c.author_id === app.user.id);
         return `
             <div class="comment-item border-bottom pb-2 mb-2" data-comment-id="${c.id}">
                 <div class="d-flex">
                     <div class="vote-buttons me-2">
                         <button type="button" class="btn btn-sm btn-outline-secondary vote-up${upActive}" data-value="1" title="Like"><i class="bi bi-arrow-up"></i></button>
                         <span class="d-block text-center small karma-val">${karma}</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary vote-down${downActive}" data-value="-1" title="Dislike"><i class="bi bi-arrow-down"></i></button>
+                        ${isOwnComment ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary vote-down${downActive}" data-value="-1" title="Dislike"><i class="bi bi-arrow-down"></i></button>`}
                     </div>
                     <div class="flex-grow-1">
                         <small class="text-muted">${wallet}</small>

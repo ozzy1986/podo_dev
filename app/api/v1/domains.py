@@ -6,10 +6,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from app.api.deps import (
+    get_comment_repo,
     get_domain_service,
     get_dns_service,
     get_current_user
 )
+from app.repositories.comment_repo import CommentRepository
 from app.services.domain_service import DomainService
 from app.services.dns_service import DNSService
 from app.models.domain import (
@@ -34,23 +36,29 @@ router = APIRouter(prefix="/domains", tags=["Domains"])
 async def add_domain(
     request: AddDomainRequest,
     current_user: dict = Depends(get_current_user),
-    domain_service: DomainService = Depends(get_domain_service)
+    domain_service: DomainService = Depends(get_domain_service),
+    comment_repo: CommentRepository = Depends(get_comment_repo),
 ):
     """
     Add a new domain for mining.
     
     - **domain**: Domain name (e.g., example.com)
     
-    Requires authentication.
+    Requires authentication. Owner automatically gets a like on the domain.
     """
     try:
         domain = await domain_service.add_domain(
             user_id=current_user['id'],
             domain=request.domain
         )
-        
+        await comment_repo.set_vote(
+            user_id=current_user["id"],
+            target_type="domain",
+            target_id=domain["id"],
+            target_key=None,
+            value=1,
+        )
         return DomainResponse(**domain)
-    
     except (ValidationError, ConflictError) as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
