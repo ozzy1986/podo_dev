@@ -960,6 +960,10 @@ body {
     max-width: 100%;
 }
 
+.rating-table .karma-col .rating-vote-block .rating-comments-wrap {
+    gap: 0.15rem;
+}
+
 .rating-table .karma-col .rating-vote-block .rating-comments-count {
     white-space: nowrap;
     min-width: 2.25rem;
