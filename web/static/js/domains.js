@@ -133,7 +133,7 @@
                     </div>
                     
                     <div class="mt-4 domain-vote-block">
-                        <div class="d-flex align-items-center flex-wrap gap-2 domain-vote-and-comments-row">
+                        <div class="d-flex align-items-center flex-nowrap gap-2 domain-vote-and-comments-row">
                             <div class="d-flex align-items-center gap-2">
                                 <span class="text-muted me-1" data-i18n="domain_likes">Likes:</span>
                                 ${api.token ? `
