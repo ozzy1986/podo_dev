@@ -956,31 +956,21 @@ body {
     display: inline-flex;
     align-items: center;
     flex-wrap: nowrap;
-    gap: 0.65rem;
+    gap: 0.45rem;
     max-width: 100%;
 }
 
 .rating-table .karma-col .rating-vote-block .rating-comments-count {
     white-space: nowrap;
-    min-width: 2.5rem;
-    display: inline-block;
-    text-align: center;
-}
-
-.rating-table .karma-col .rating-vote-block .rating-karma-val {
-    min-width: 2.5rem;
-}
-
-.rating-table .karma-col .rating-vote-block .rating-comments-block {
-    font-size: 1rem;
-}
-
-.rating-table .karma-col .rating-vote-block .rating-comments-block i {
-    font-size: 1rem;
+    min-width: 2.25rem;
 }
 
 .rating-table .karma-col .rating-vote-block .btn-sm {
     padding: 0.2rem 0.35rem;
+}
+
+.rating-table .karma-col .rating-vote-block .small {
+    font-size: 0.75rem;
 }
 
 /* Column widths */
@@ -1023,10 +1013,10 @@ body {
     min-width: 80px;
 }
 
-/* Same width range as rating-col; enough for 4-digit numbers and comments */
+/* Same width range as rating-col so column aligns with table */
 .rating-table .karma-col {
-    width: 140px;
-    min-width: 130px;
+    width: 120px;
+    min-width: 110px;
 }
 
 /* Sortable headers */
@@ -1170,7 +1160,7 @@ body {
     }
     
     .rating-table .karma-col {
-        min-width: 130px;
+        min-width: 110px;
     }
     
     .rating-table .karma-col .btn-sm {
