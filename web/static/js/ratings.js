@@ -247,14 +247,14 @@
                     ? `<div class="rating-vote-block d-inline-flex align-items-center justify-content-end flex-nowrap">
                         <div class="d-inline-flex align-items-center">
                             <button type="button" class="btn btn-sm btn-outline-secondary rating-vote-up${upActive}" data-domain-id="${d.id}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
-                            <span class="d-inline-block text-center px-1 rating-karma-val" style="min-width: 1.5rem;">${karmaVal}</span>
+                            <span class="d-inline-block text-center px-1 rating-karma-val">${karmaVal}</span>
                             ${isOwnDomain ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary rating-vote-down${downActive}" data-domain-id="${d.id}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>`}
                         </div>
-                        <span class="text-muted small d-inline-flex align-items-center gap-1" title="${commentsLabel}"><i class="bi bi-chat-left-text" aria-hidden="true"></i><span class="rating-comments-count">${commentsCountVal}</span></span>
+                        <span class="rating-comments-block text-muted d-inline-flex align-items-center gap-1" title="${commentsLabel}"><i class="bi bi-chat-left-text" aria-hidden="true"></i><span class="rating-comments-count">${commentsCountVal}</span></span>
                        </div>`
                     : `<div class="rating-vote-block d-inline-flex align-items-center flex-nowrap">
                         <span class="rating-karma-val">${karmaVal}</span>
-                        <span class="text-muted small d-inline-flex align-items-center gap-1" title="${commentsLabel}"><i class="bi bi-chat-left-text" aria-hidden="true"></i><span class="rating-comments-count">${commentsCountVal}</span></span>
+                        <span class="rating-comments-block text-muted d-inline-flex align-items-center gap-1" title="${commentsLabel}"><i class="bi bi-chat-left-text" aria-hidden="true"></i><span class="rating-comments-count">${commentsCountVal}</span></span>
                         <small class="text-muted ms-1" data-i18n="login_to_vote">Log in to vote</small>
                        </div>`;
                 domainRows += `
@@ -356,7 +356,7 @@
                                 <th class="text-end weight-col sortable" data-sort="weight">
                                     <span data-i18n="weight">Weight</span> ${this.getSortIndicator('weight')}
                                 </th>
-                                <th class="text-end karma-col"><span data-i18n="likes">Likes</span></th>
+                                <th class="text-center karma-col"><span data-i18n="likes">Likes</span></th>
                             </tr>
                         </thead>
                         <tbody>
