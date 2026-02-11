@@ -339,7 +339,7 @@ async def test_get_user_karma_returns_comment_and_domain_karma(client, test_app,
     mock_comment_repo.get_user_karmas = AsyncMock(return_value=(7, 12))
     test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
     try:
-        r = await client.get("/api/v1/user/karma", headers=auth_headers_comments)
+        r = client.get("/api/v1/user/karma", headers=auth_headers_comments)
         assert r.status_code == 200
         data = r.json()
         assert data["user_id"] == sample_user["id"]
