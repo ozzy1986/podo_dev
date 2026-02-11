@@ -356,7 +356,7 @@
                                 <th class="text-end weight-col sortable" data-sort="weight">
                                     <span data-i18n="weight">Weight</span> ${this.getSortIndicator('weight')}
                                 </th>
-                                <th class="text-end karma-col" data-i18n="likes">Likes</th>
+                                <th class="text-end karma-col"><span data-i18n="likes">Likes</span></th>
                             </tr>
                         </thead>
                         <tbody>

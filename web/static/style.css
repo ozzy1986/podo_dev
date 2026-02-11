@@ -1003,6 +1003,22 @@ body {
     min-width: 80px;
 }
 
+.rating-table .karma-col {
+    width: 160px;
+    min-width: 150px;
+}
+
+/* Likes column: prevent clipping, align header like other end columns */
+.rating-table thead th.karma-col {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.rating-table tbody td.karma-col {
+    overflow: visible;
+}
+
 /* Sortable headers */
 .rating-table th.sortable {
     user-select: none;
@@ -1143,9 +1159,9 @@ body {
         min-width: 70px;
     }
     
-    /* Keep votes + comments on one line: min width for karma column */
+    /* Keep votes + comments on one line: ensure karma column not cut off */
     .rating-table .karma-col {
-        min-width: 7rem;
+        min-width: 150px;
     }
     
     .rating-table .karma-col .btn-sm {
