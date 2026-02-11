@@ -221,6 +221,7 @@
   "verify": "Verify",
   "save": "Save",
   "copy": "Copy",
+  "click_to_copy": "Click to copy",
   "copied_to_clipboard": "Copied to clipboard!",
   "dns_instructions": "DNS Instructions",
   "add_txt_record": "Add this TXT record to your domain's DNS:",

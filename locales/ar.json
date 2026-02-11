@@ -218,6 +218,7 @@
   "verify": "التحقق",
   "save": "حفظ",
   "copy": "نسخ",
+  "click_to_copy": "انقر للنسخ",
   "copied_to_clipboard": "تم النسخ إلى الحافظة!",
   "dns_instructions": "تعليمات DNS",
   "add_txt_record": "أضف سجل TXT هذا إلى DNS نطاقك:",

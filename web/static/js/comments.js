@@ -66,19 +66,37 @@
             }).join('');
             if (typeof app !== 'undefined' && app.updateI18n) app.updateI18n();
             self.attachCommentVoteHandlers(containerId, entityType, entityId, entityKey);
+            self.attachCommentWalletCopyHandlers();
         }).catch(function() {
             listEl.innerHTML = '<p class="text-muted small mb-0">Failed to load comments.</p>';
         });
     };
 
+    function formatCommentDate(isoString) {
+        if (!isoString) return '';
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) return '';
+        const pad = function(n) { return (n < 10 ? '0' : '') + n; };
+        return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' +
+            pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    function shortenWallet(wallet) {
+        if (!wallet) return '';
+        if (wallet.length <= 6) return wallet;
+        return wallet.substring(0, 3) + '...' + wallet.substring(wallet.length - 3);
+    }
+
     App.prototype.renderOneComment = function(c, entityType, entityId, entityKey) {
-        const wallet = (c.author_wallet || '').substring(0, 8) + '…';
+        const fullWallet = c.author_wallet || '';
+        const walletDisplay = shortenWallet(fullWallet);
         const body = (typeof this !== 'undefined' && this.escapeHtml) ? this.escapeHtml(c.body) : c.body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const karma = c.karma_score != null ? c.karma_score : 0;
         const uv = c.user_vote != null ? c.user_vote : null;
         const upActive = uv === 1 ? ' active' : '';
         const downActive = uv === -1 ? ' active' : '';
         const isOwnComment = (typeof app !== 'undefined' && app.user && c.author_id === app.user.id);
+        const walletAttr = fullWallet ? ' data-wallet="' + fullWallet.replace(/"/g, '&quot;') + '"' : '';
         return `
             <div class="comment-item border-bottom pb-2 mb-2" data-comment-id="${c.id}">
                 <div class="d-flex">
@@ -88,13 +106,46 @@
                         ${isOwnComment ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary vote-down${downActive}" data-value="-1" title="Dislike"><i class="bi bi-arrow-down"></i></button>`}
                     </div>
                     <div class="flex-grow-1">
-                        <small class="text-muted">${wallet}</small>
+                        <small class="text-muted comment-wallet-copy"${walletAttr} title="${(typeof i18n !== 'undefined' && i18n.t('click_to_copy')) ? i18n.t('click_to_copy') : 'Click to copy'}">${walletDisplay}</small>
                         <p class="mb-1 mt-0 small" style="white-space: pre-wrap;">${body}</p>
-                        <small class="text-muted">${c.created_at ? new Date(c.created_at).toLocaleString() : ''}</small>
+                        <small class="text-muted">${formatCommentDate(c.created_at)}</small>
                     </div>
                 </div>
             </div>
         `;
+    };
+
+    App.prototype.attachCommentWalletCopyHandlers = function() {
+        const listEl = document.getElementById('comments-list');
+        if (!listEl) return;
+        listEl.querySelectorAll('.comment-wallet-copy[data-wallet]').forEach(function(el) {
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', function() {
+                const w = el.getAttribute('data-wallet');
+                if (!w) return;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(w).then(function() {
+                        if (typeof app !== 'undefined' && app.showToast) app.showToast((typeof i18n !== 'undefined' && i18n.t('copied_to_clipboard')) ? i18n.t('copied_to_clipboard') : 'Copied', 'success');
+                    }).catch(function() { fallbackCopy(w); });
+                } else {
+                    fallbackCopy(w);
+                }
+            });
+        });
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                if (typeof app !== 'undefined' && app.showToast) app.showToast((typeof i18n !== 'undefined' && i18n.t('copied_to_clipboard')) ? i18n.t('copied_to_clipboard') : 'Copied', 'success');
+            } catch (e) {}
+            document.body.removeChild(ta);
+        }
     };
 
     App.prototype.attachCommentVoteHandlers = function(containerId, entityType, entityId, entityKey) {
