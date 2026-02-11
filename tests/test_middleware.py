@@ -15,7 +15,7 @@ from app.core.middleware import (
     LoggingMiddleware,
     setup_exception_handlers,
 )
-from app.core.exceptions import AppException, AuthError, NotFoundError
+from app.core.exceptions import AppException, AuthError, NotFoundError, PaidVoteRequiredError
 
 
 # ---------------------------------------------------------------------------
@@ -263,3 +263,20 @@ class TestSetupExceptionHandlers:
         body = resp.json()
         assert body["ok"] is False
         assert "validation_errors" in body.get("details", {})
+
+    def test_paid_vote_required_returns_409_envelope(self):
+        """Route raising PaidVoteRequiredError returns 409 with details.code for frontend."""
+        app = FastAPI()
+        setup_exception_handlers(app)
+
+        @app.get("/vote")
+        async def vote():
+            raise PaidVoteRequiredError("Paid vote required")
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/vote")
+        assert resp.status_code == 409
+        body = resp.json()
+        assert body.get("ok") is False
+        assert body.get("details", {}).get("code") == "PAID_VOTE_REQUIRED"
+        assert "error" in body

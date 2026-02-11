@@ -166,9 +166,20 @@ async def test_set_vote_like_own_comment_allowed(client, test_app, auth_headers_
         test_app.dependency_overrides.pop(get_domain_repo, None)
 
 
+def _assert_409_paid_vote_envelope(resp, body):
+    """Assert response is 409 with envelope shape required by frontend (ok, error, details.code)."""
+    assert resp.status_code == 409, f"expected 409 got {resp.status_code}"
+    assert body.get("ok") is False, "envelope must have ok: false so frontend can show paid form"
+    assert "error" in body, "envelope must have error message"
+    details = body.get("details") or {}
+    assert details.get("code") == "PAID_VOTE_REQUIRED", (
+        f"details.code must be PAID_VOTE_REQUIRED so frontend shows paid form, got {details!r}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_set_vote_same_direction_returns_409_paid_vote_required(client, test_app, auth_headers_comments, mock_comment_repo, mock_domain_repo, sample_user):
-    """When user already voted in same direction, API returns 409 with code PAID_VOTE_REQUIRED."""
+    """When user already voted in same direction, API returns 409 with envelope (ok, error, details.code)."""
     mock_comment_repo.get_comment.return_value = {"id": 5, "author_id": 999}
     mock_comment_repo.set_vote.side_effect = PaidVoteRequiredError("Paid vote required")
     test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
@@ -180,10 +191,29 @@ async def test_set_vote_same_direction_returns_409_paid_vote_required(client, te
             json={"value": 1},
             headers=auth_headers_comments,
         )
-        assert resp.status_code == 409
         body = resp.json()
-        details = body.get("details") or {}
-        assert details.get("code") == "PAID_VOTE_REQUIRED"
+        _assert_409_paid_vote_envelope(resp, body)
+    finally:
+        test_app.dependency_overrides.pop(get_comment_repo, None)
+        test_app.dependency_overrides.pop(get_domain_repo, None)
+
+
+@pytest.mark.asyncio
+async def test_set_vote_domain_409_paid_vote_required_envelope(client, test_app, auth_headers_comments, mock_comment_repo, mock_domain_repo, sample_user):
+    """POST /votes for domain with same-direction vote returns 409 with full envelope (catches wrong body in production)."""
+    mock_domain_repo.get_by_id.return_value = {"id": 448, "user_id": 999}
+    mock_comment_repo.set_vote.side_effect = PaidVoteRequiredError("Paid vote required")
+    test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
+    test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
+
+    try:
+        resp = client.post(
+            "/api/v1/votes?target_type=domain&value=-1&target_id=448",
+            json={"value": -1},
+            headers=auth_headers_comments,
+        )
+        body = resp.json()
+        _assert_409_paid_vote_envelope(resp, body)
     finally:
         test_app.dependency_overrides.pop(get_comment_repo, None)
         test_app.dependency_overrides.pop(get_domain_repo, None)
