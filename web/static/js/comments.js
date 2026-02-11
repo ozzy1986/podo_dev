@@ -99,7 +99,6 @@
     App.prototype.attachCommentVoteHandlers = function(containerId, entityType, entityId, entityKey) {
         const listEl = document.getElementById('comments-list');
         if (!listEl) return;
-        const self = this;
         listEl.querySelectorAll('.vote-up, .vote-down').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 if (!api.token) return;
@@ -107,9 +106,15 @@
                 const value = parseInt(btn.getAttribute('data-value'), 10);
                 const row = btn.closest('.comment-item');
                 const karmaEl = row.querySelector('.karma-val');
-                const wasActive = btn.classList.contains('active');
+                const currentKarma = parseInt(karmaEl ? karmaEl.textContent : '0', 10) || 0;
+                const currentUserVote = row.querySelector('.vote-up.active') ? 1 : (row.querySelector('.vote-down.active') ? -1 : 0);
                 api.setVote('comment', commentId, null, value).then(function() {
-                    self.loadCommentsInto(containerId, entityType, entityId, entityKey);
+                    const newKarma = currentKarma + value - currentUserVote;
+                    if (karmaEl) karmaEl.textContent = newKarma;
+                    row.querySelectorAll('.vote-up, .vote-down').forEach(function(b) {
+                        const v = parseInt(b.getAttribute('data-value'), 10);
+                        b.classList.toggle('active', v === value);
+                    });
                 }).catch(function() {
                     if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
                 });

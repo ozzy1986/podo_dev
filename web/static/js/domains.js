@@ -161,14 +161,23 @@
                 this.renderCommentsBlock('domain-comments-container', 'domain', data.id, null);
             }
             var self = this;
-            var domainName = data.domain;
             var domainId = data.id;
+            var currentKarma = typeof data.karma === 'number' ? data.karma : 0;
+            var currentUserVote = data.user_vote != null ? data.user_vote : null;
+            var block = document.querySelector('.domain-vote-block');
             document.querySelectorAll('.domain-vote-up, .domain-vote-down').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     if (!api.token) return;
                     var value = parseInt(btn.getAttribute('data-value'), 10);
                     api.setVote('domain', domainId, null, value).then(function() {
-                        self.loadDomainPage(domainName);
+                        currentKarma = currentKarma + value - (currentUserVote || 0);
+                        currentUserVote = value;
+                        var karmaEl = block ? block.querySelector('.domain-karma-val') : null;
+                        if (karmaEl) karmaEl.textContent = currentKarma;
+                        block.querySelectorAll('.domain-vote-up, .domain-vote-down').forEach(function(b) {
+                            var v = parseInt(b.getAttribute('data-value'), 10);
+                            b.classList.toggle('active', v === value);
+                        });
                     }).catch(function() {
                         if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
                     });

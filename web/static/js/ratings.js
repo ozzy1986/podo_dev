@@ -379,7 +379,6 @@
     };
 
     App.prototype.setupRatingVoteListeners = function() {
-        const self = this;
         const main = document.getElementById('main-content');
         if (!main) return;
         main.querySelectorAll('.rating-vote-up, .rating-vote-down').forEach(function(btn) {
@@ -390,16 +389,19 @@
                 const domainId = parseInt(btn.getAttribute('data-domain-id'), 10);
                 const value = parseInt(btn.getAttribute('data-value'), 10);
                 if (isNaN(domainId)) return;
+                const row = btn.closest('tr[data-domain-id]');
+                const karmaEl = row ? row.querySelector('.rating-karma-val') : null;
+                const currentKarma = parseInt(karmaEl ? karmaEl.textContent : '0', 10) || 0;
+                const currentUserVote = row && row.querySelector('.rating-vote-up.active') ? 1 : (row && row.querySelector('.rating-vote-down.active') ? -1 : 0);
                 api.setVote('domain', domainId, null, value).then(function() {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const wallet = urlParams.get('wallet') || null;
-                    const sldLength = urlParams.get('sld_length');
-                    const sld = (sldLength === 'all' || !sldLength) ? 'all' : (parseInt(sldLength, 10) || 18);
-                    const registrarId = urlParams.get('registrar_id') ? parseInt(urlParams.get('registrar_id'), 10) : null;
-                    const hosterId = urlParams.get('hoster_id') ? parseInt(urlParams.get('hoster_id'), 10) : null;
-                    const zone = urlParams.get('zone') || null;
-                    const page = parseInt(urlParams.get('page'), 10) || 1;
-                    self.loadRating(page, self.ratingSortBy, self.ratingSortOrder, wallet, sld, registrarId, hosterId, zone);
+                    const newKarma = currentKarma + value - currentUserVote;
+                    if (karmaEl) karmaEl.textContent = newKarma;
+                    if (row) {
+                        row.querySelectorAll('.rating-vote-up, .rating-vote-down').forEach(function(b) {
+                            const v = parseInt(b.getAttribute('data-value'), 10);
+                            b.classList.toggle('active', v === value);
+                        });
+                    }
                 }).catch(function() {
                     if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
                 });
