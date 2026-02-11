@@ -133,21 +133,25 @@
                     </div>
                     
                     <div class="mt-4 domain-vote-block">
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <span class="text-muted me-1" data-i18n="domain_likes">Likes:</span>
-                            ${api.token ? `
-                                <div class="d-inline-flex align-items-center">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary domain-vote-up ${(data.user_vote === 1) ? 'active' : ''}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
-                                    <span class="d-inline-block text-center px-2 domain-karma-val" style="min-width: 2rem;">${typeof data.karma === 'number' ? data.karma : 0}</span>
-                                    ${(this.user && data.user_id === this.user.id) ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary domain-vote-down ${(data.user_vote === -1) ? 'active' : ''}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>`}
-                                </div>
-                            ` : `
-                                <span class="domain-karma-val">${typeof data.karma === 'number' ? data.karma : 0}</span>
-                                <small class="text-muted" data-i18n="login_to_vote">Log in to vote</small>
-                            `}
-                            <span class="text-muted mx-2" aria-hidden="true">·</span>
-                            <span class="text-muted me-1" data-i18n="comments">Comments</span>
-                            <span class="domain-comments-count">${typeof data.comments_count === 'number' ? data.comments_count : 0}</span>
+                        <div class="d-flex align-items-center flex-wrap gap-2 domain-vote-and-comments-row">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted me-1" data-i18n="domain_likes">Likes:</span>
+                                ${api.token ? `
+                                    <div class="d-inline-flex align-items-center">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary domain-vote-up ${(data.user_vote === 1) ? 'active' : ''}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
+                                        <span class="d-inline-block text-center px-2 domain-karma-val" style="min-width: 2rem;">${typeof data.karma === 'number' ? data.karma : 0}</span>
+                                        ${(this.user && data.user_id === this.user.id) ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary domain-vote-down ${(data.user_vote === -1) ? 'active' : ''}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>`}
+                                    </div>
+                                ` : `
+                                    <span class="domain-karma-val">${typeof data.karma === 'number' ? data.karma : 0}</span>
+                                    <small class="text-muted" data-i18n="login_to_vote">Log in to vote</small>
+                                `}
+                            </div>
+                            <div class="d-flex align-items-center gap-1 ms-3 domain-comments-count-wrap">
+                                <i class="bi bi-chat-left-text text-muted small" aria-hidden="true" title="${(typeof i18n !== 'undefined' && i18n.t) ? i18n.t('comments') : 'Comments'}"></i>
+                                <span class="text-muted me-1" data-i18n="comments">Comments</span>
+                                <span class="domain-comments-count">${typeof data.comments_count === 'number' ? data.comments_count : 0}</span>
+                            </div>
                         </div>
                     </div>
                     

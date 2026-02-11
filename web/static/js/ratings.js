@@ -249,9 +249,9 @@
                             <span class="d-inline-block text-center px-1 rating-karma-val" style="min-width: 1.5rem;">${karmaVal}</span>
                             ${isOwnDomain ? '' : `<button type="button" class="btn btn-sm btn-outline-secondary rating-vote-down${downActive}" data-domain-id="${d.id}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>`}
                         </div>
-                        <span class="text-muted small ms-1" title="${(typeof i18n !== 'undefined' && i18n.t) ? i18n.t('comments') : 'Comments'}">· <span class="rating-comments-count">${commentsCountVal}</span></span>
+                        <span class="text-muted small ms-2 d-inline-flex align-items-center gap-1" title="${(typeof i18n !== 'undefined' && i18n.t) ? i18n.t('comments') : 'Comments'}"><i class="bi bi-chat-left-text" aria-hidden="true"></i><span class="rating-comments-count">${commentsCountVal}</span></span>
                        </div>`
-                    : `<span class="rating-karma-val">${karmaVal}</span><span class="text-muted small ms-1">· <span class="rating-comments-count">${commentsCountVal}</span></span><small class="text-muted ms-1" data-i18n="login_to_vote">Log in to vote</small>`;
+                    : `<span class="rating-karma-val">${karmaVal}</span><span class="text-muted small ms-2 d-inline-flex align-items-center gap-1" title="${(typeof i18n !== 'undefined' && i18n.t) ? i18n.t('comments') : 'Comments'}"><i class="bi bi-chat-left-text" aria-hidden="true"></i><span class="rating-comments-count">${commentsCountVal}</span></span><small class="text-muted ms-1" data-i18n="login_to_vote">Log in to vote</small>`;
                 domainRows += `
                     <tr data-domain-id="${d.id}">
                         <td class="text-center rank-col ${rankClass}">${rank}</td>
@@ -336,7 +336,7 @@
                                     <select class="form-select form-select-sm d-inline-block w-auto ms-1" id="rating-length-filter" title="Filter by domain length">
                                         <option value="18" ${(sldLength === 18 || sldLength === '18') ? 'selected' : ''}>18+</option>
                                         ${[17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1].map(n => `<option value="${n}" ${sldLength === n ? 'selected' : ''}>${n}</option>`).join('')}
-                                        <option value="all" ${sldLength === 'all' ? 'selected' : ''}>All</option>
+                                        <option value="all" ${sldLength === 'all' ? 'selected' : ''} data-i18n="all">All</option>
                                     </select>
                                 </th>
                                 <th class="text-center age-col sortable" data-sort="age">
