@@ -99,7 +99,7 @@ class RatingRepository(BaseRepository):
         karma_select = ", (SELECT COALESCE(SUM(v.value), 0)::int FROM votes v WHERE v.target_type = 'domain' AND v.target_id = d.id) AS karma"
         if user_id is not None:
             params.extend([per_page, offset, user_id])
-            user_vote_select = f", (SELECT v.value FROM votes v WHERE v.user_id = ${idx + 3} AND v.target_type = 'domain' AND v.target_id = d.id LIMIT 1) AS user_vote"
+            user_vote_select = f", (SELECT v.value FROM votes v WHERE v.user_id = ${idx + 2} AND v.target_type = 'domain' AND v.target_id = d.id LIMIT 1) AS user_vote"
         else:
             params.extend([per_page, offset])
             user_vote_select = ", NULL::smallint AS user_vote"
@@ -158,7 +158,7 @@ class RatingRepository(BaseRepository):
         karma_select = ", (SELECT COALESCE(SUM(v.value), 0)::int FROM votes v WHERE v.target_type = 'domain' AND v.target_id = d.id) AS karma"
         if user_id is not None:
             params.extend([per_page, offset, user_id])
-            user_vote_select = f", (SELECT v.value FROM votes v WHERE v.user_id = ${idx + 3} AND v.target_type = 'domain' AND v.target_id = d.id LIMIT 1) AS user_vote"
+            user_vote_select = f", (SELECT v.value FROM votes v WHERE v.user_id = ${idx + 2} AND v.target_type = 'domain' AND v.target_id = d.id LIMIT 1) AS user_vote"
         else:
             params.extend([per_page, offset])
             user_vote_select = ", NULL::smallint AS user_vote"
