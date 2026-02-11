@@ -34,6 +34,7 @@ def mock_comment_repo():
     repo.list_replies = AsyncMock(return_value=[])
     repo.get_user_vote = AsyncMock(return_value=None)
     repo.get_entity_karma = AsyncMock(return_value=0)
+    repo.get_user_karmas = AsyncMock(return_value=(0, 0))
     repo.remove_vote = AsyncMock(return_value=True)
     repo.delete_comment = AsyncMock(return_value=True)
     repo.update_comment_moderation = AsyncMock()
@@ -330,3 +331,21 @@ async def test_set_paid_vote_no_existing_vote_refunds_and_returns_400(client, te
         test_app.dependency_overrides.pop(get_comment_repo, None)
         test_app.dependency_overrides.pop(get_domain_repo, None)
         test_app.dependency_overrides.pop(get_user_repo, None)
+
+
+@pytest.mark.asyncio
+async def test_get_user_karma_returns_comment_and_domain_karma(client, test_app, auth_headers_comments, mock_comment_repo, sample_user):
+    """GET /user/karma returns comment_karma and domain_karma from stored user aggregates."""
+    mock_comment_repo.get_user_karmas = AsyncMock(return_value=(7, 12))
+    test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
+    try:
+        r = await client.get("/api/v1/user/karma", headers=auth_headers_comments)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["user_id"] == sample_user["id"]
+        assert data["karma"] == 7
+        assert data["comment_karma"] == 7
+        assert data["domain_karma"] == 12
+        mock_comment_repo.get_user_karmas.assert_called_once_with(sample_user["id"])
+    finally:
+        test_app.dependency_overrides.pop(get_comment_repo, None)

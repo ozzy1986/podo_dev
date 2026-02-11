@@ -320,12 +320,27 @@ class CommentRepository(BaseRepository):
         return int(val) if val is not None else 0
 
     async def get_user_karma(self, user_id: int) -> int:
-        """User karma = sum of karma_score of all their approved comments."""
+        """User comment karma from stored users.comment_karma (updated by DB triggers)."""
         val = await self.db.fetchval(
-            """
-            SELECT COALESCE(SUM(karma_score), 0)::int FROM comments
-            WHERE author_id = $1 AND moderation_status = 'approved'
-            """,
+            "SELECT comment_karma FROM users WHERE id = $1",
             user_id,
         )
         return int(val) if val is not None else 0
+
+    async def get_user_domain_karma(self, user_id: int) -> int:
+        """User domain karma from stored users.domain_karma (updated by DB triggers)."""
+        val = await self.db.fetchval(
+            "SELECT domain_karma FROM users WHERE id = $1",
+            user_id,
+        )
+        return int(val) if val is not None else 0
+
+    async def get_user_karmas(self, user_id: int) -> tuple[int, int]:
+        """Return (comment_karma, domain_karma) from users table."""
+        row = await self.db.fetchrow(
+            "SELECT comment_karma, domain_karma FROM users WHERE id = $1",
+            user_id,
+        )
+        if not row:
+            return (0, 0)
+        return (int(row["comment_karma"] or 0), int(row["domain_karma"] or 0))

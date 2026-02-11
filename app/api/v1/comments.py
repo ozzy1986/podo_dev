@@ -272,6 +272,11 @@ async def get_my_karma(
     current_user: dict = Depends(get_current_user),
     repo: CommentRepository = Depends(get_comment_repo),
 ):
-    """Get current user karma (sum of karma of all their approved comments)."""
-    karma = await repo.get_user_karma(current_user["id"])
-    return {"user_id": current_user["id"], "karma": karma}
+    """Get current user comment_karma and domain_karma (stored in DB, updated by triggers)."""
+    comment_karma, domain_karma = await repo.get_user_karmas(current_user["id"])
+    return {
+        "user_id": current_user["id"],
+        "karma": comment_karma,
+        "comment_karma": comment_karma,
+        "domain_karma": domain_karma,
+    }

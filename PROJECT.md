@@ -168,7 +168,7 @@ The platform is a "social network of domains": the main entities are **domain**,
 
 - **Comments**: Stored in `comments` with `entity_type` + `entity_id` (for domain/registrar/hoster) or `entity_key` (for wallet/zone). Root comments have `parent_id = NULL`; replies have `parent_id` set. **Premoderation** is supported via `moderation_status` (`pending` | `approved` | `rejected`); by default new comments are `approved` so they pass without moderation until you switch to premoderation.
 - **Votes**: One row per user per target in `votes`; `value` is +1 or -1. Targets: comment, domain, registrar, hoster, zone, wallet. Comment karma is updated automatically by a DB trigger when votes change.
-- **Karma**: For comments, stored in `comments.karma_score`. For other entities, computed on read as sum of `votes.value`. User karma: sum of `karma_score` of all their approved comments.
+- **Karma**: For comments, stored in `comments.karma_score`. For other entities, computed on read as sum of `votes.value`. Per-user (wallet) **comment_karma** and **domain_karma** are stored in `users` and updated by DB triggers when votes on their comments or domains change, or when comments are deleted/moderation changes or domains are deleted.
 
 ## API Reference
 
@@ -235,7 +235,7 @@ All endpoints use prefix `/api/v1/`. Authentication via `Authorization: Bearer <
 | POST | /votes | Yes | Set like/dislike (query: target_type, target_id/target_key; body: value 1 or -1) |
 | DELETE | /votes | Yes | Remove vote (query: target_type, target_id/target_key) |
 | GET | /karma | No | Entity karma (query: target_type, target_id/target_key) |
-| GET | /user/karma | Yes | Current user karma |
+| GET | /user/karma | Yes | Current user karma (comment_karma, domain_karma; stored in users, updated by triggers) |
 
 ### Error Response Format
 
