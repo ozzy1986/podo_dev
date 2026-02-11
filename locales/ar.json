@@ -331,6 +331,8 @@
   "likes": "الإعجابات",
   "domain_likes": "الإعجابات:",
   "login_to_vote": "سجّل الدخول للتصويت",
+  "comments": "التعليقات",
+  "send": "إرسال",
   "paid_like": "إعجاب مدفوع",
   "paid_dislike": "عدم إعجاب مدفوع",
   "paid_vote_amount_placeholder": "المبلغ (الأصوات)",

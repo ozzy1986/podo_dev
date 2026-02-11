@@ -334,6 +334,8 @@
   "likes": "Лайки",
   "domain_likes": "Лайки:",
   "login_to_vote": "Войдите, чтобы голосовать",
+  "comments": "Комментарии",
+  "send": "Отправить",
   "paid_like": "Платный лайк",
   "paid_dislike": "Платный дизлайк",
   "paid_vote_amount_placeholder": "Количество (голосов)",

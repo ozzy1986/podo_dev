@@ -334,6 +334,8 @@
   "likes": "Likes",
   "domain_likes": "Likes:",
   "login_to_vote": "Log in to vote",
+  "comments": "Comments",
+  "send": "Send",
   "paid_like": "Paid like",
   "paid_dislike": "Paid dislike",
   "paid_vote_amount_placeholder": "Amount (votes)",
