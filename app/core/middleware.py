@@ -185,6 +185,10 @@ def setup_exception_handlers(app):
     from fastapi import HTTPException
     from fastapi.exceptions import RequestValidationError
 
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException):
+        return make_error_response(exc.status_code, exc.message, exc.details)
+
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
         detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)

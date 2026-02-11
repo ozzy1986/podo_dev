@@ -169,7 +169,12 @@
                         b.classList.toggle('active', v === value);
                     });
                 }).catch(function(err) {
-                    if (err && err.status === 409 && err.responseData && (err.responseData.details && err.responseData.details.code === 'PAID_VOTE_REQUIRED')) {
+                    var isPaidVoteRequired = err && err.status === 409 && (
+                        (err.responseData && err.responseData.details && err.responseData.details.code === 'PAID_VOTE_REQUIRED') ||
+                        (err.responseData && err.responseData.detail && err.responseData.detail.code === 'PAID_VOTE_REQUIRED') ||
+                        (err.responseData && err.responseData.error && String(err.responseData.error).indexOf('Paid vote') !== -1)
+                    );
+                    if (isPaidVoteRequired) {
                         var bodyEl = row.querySelector('p.mb-1');
                         var snippet = (bodyEl && bodyEl.textContent) ? bodyEl.textContent.trim().substring(0, 40) : '';
                         if (snippet.length >= 40) snippet += '…';

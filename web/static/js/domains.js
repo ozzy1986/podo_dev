@@ -182,7 +182,12 @@
                             b.classList.toggle('active', v === value);
                         });
                     }).catch(function(err) {
-                        if (err && err.status === 409 && err.responseData && (err.responseData.details && err.responseData.details.code === 'PAID_VOTE_REQUIRED')) {
+                        var isPaidVoteRequired = err && err.status === 409 && (
+                            (err.responseData && (err.responseData.details && err.responseData.details.code === 'PAID_VOTE_REQUIRED')) ||
+                            (err.responseData && (err.responseData.detail && err.responseData.detail.code === 'PAID_VOTE_REQUIRED')) ||
+                            (err.responseData && err.responseData.error && String(err.responseData.error).indexOf('Paid vote') !== -1)
+                        );
+                        if (isPaidVoteRequired) {
                             if (typeof showPaidVoteForm === 'function') {
                                 showPaidVoteForm({
                                     anchorEl: block || document.getElementById('main-content'),
