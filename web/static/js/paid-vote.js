@@ -49,7 +49,7 @@
                 '<strong>' + (title + ': ' + targetLabel) + '</strong>' +
                 '</div>' +
                 '<div class="mt-2 d-flex flex-wrap align-items-center gap-2">' +
-                '<input type="number" min="1" max="' + Math.max(1, maxAmount) + '" class="form-control form-control-sm paid-vote-amount" style="width:6rem" placeholder="' + amountPlaceholder + '" value="">' +
+                '<input type="number" min="1" step="1" max="' + Math.max(1, maxAmount) + '" class="form-control form-control-sm paid-vote-amount" style="width:6rem" placeholder="' + amountPlaceholder + '" value="">' +
                 '<span class="small text-muted">' + votesLabel + '</span>' +
                 (canUseMax ? '<button type="button" class="btn btn-sm btn-outline-secondary paid-vote-use-max">' + useMaxLabel + ' (' + maxAmount + ')</button>' : '') +
                 '</div>' +
@@ -104,8 +104,8 @@
 
             submitBtn.addEventListener('click', function() {
                 var amt = parseInt(amountInput.value, 10);
-                if (isNaN(amt) || amt < 1) {
-                    showError(t('paid_vote_amount_placeholder', 'Enter amount (at least 1)'));
+                if (isNaN(amt) || amt < 1 || amt !== Number(amountInput.value)) {
+                    showError(t('paid_vote_amount_placeholder', 'Enter a positive whole number (at least 1)'));
                     return;
                 }
                 if (amt > balance) {
@@ -122,9 +122,7 @@
                     }
                 }).catch(function(err) {
                     submitBtn.disabled = false;
-                    var isPaidVoteRequired = err && err.responseData && err.responseData.details && err.responseData.details.code === 'PAID_VOTE_REQUIRED';
-                    var msg = isPaidVoteRequired ? t('paid_vote_required', 'Paid vote required') : (err && err.message ? err.message : t('error', 'Request failed'));
-                    showError(msg);
+                    showError(err && err.message ? err.message : t('error', 'Request failed'));
                 });
             });
         }

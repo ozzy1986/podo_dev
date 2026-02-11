@@ -252,6 +252,33 @@ async def test_set_paid_vote_success(client, test_app, auth_headers_comments, mo
 
 
 @pytest.mark.asyncio
+async def test_set_paid_vote_amount_one_uses_paid_path(client, test_app, auth_headers_comments, mock_comment_repo, mock_domain_repo, mock_user_repo, sample_user):
+    """Submitting amount=1 from paid form uses paid path (deducts 1 token), not free path."""
+    mock_domain_repo.get_by_id.return_value = {"id": 10, "user_id": 999}
+    mock_comment_repo.add_paid_votes.return_value = {"value": 1, "amount": 1}
+    mock_comment_repo.get_entity_karma.return_value = 5
+    test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
+    test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
+    test_app.dependency_overrides[get_user_repo] = lambda: mock_user_repo
+
+    try:
+        resp = client.post(
+            "/api/v1/votes?target_type=domain&target_id=10&value=1",
+            json={"value": 1, "amount": 1},
+            headers=auth_headers_comments,
+        )
+        assert resp.status_code == 200
+        mock_comment_repo.add_paid_votes.assert_called_once()
+        mock_user_repo.update_balance.assert_called_once()
+        assert mock_user_repo.update_balance.call_args[0][1] == -1.0
+        mock_comment_repo.set_vote.assert_not_called()
+    finally:
+        test_app.dependency_overrides.pop(get_comment_repo, None)
+        test_app.dependency_overrides.pop(get_domain_repo, None)
+        test_app.dependency_overrides.pop(get_user_repo, None)
+
+
+@pytest.mark.asyncio
 async def test_set_paid_vote_insufficient_balance_returns_400(client, test_app, auth_headers_comments, mock_comment_repo, mock_domain_repo, mock_user_repo, sample_user):
     """Paid vote with amount greater than balance returns 400."""
     mock_user_repo.get_by_id.return_value = {"id": 1, "accumulated_balance": 2.0}

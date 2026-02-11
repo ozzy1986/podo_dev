@@ -175,7 +175,7 @@ async def set_vote(
     domain_repo: DomainRepository = Depends(get_domain_repo),
     user_repo: UserRepository = Depends(get_user_repo),
 ):
-    """Set like (+1) or dislike (-1). Free path: amount omitted or 1. Paid path: amount > 1 deducts tokens. Returns 409 with code PAID_VOTE_REQUIRED when free vote already used in this direction."""
+    """Set like (+1) or dislike (-1). Free path: amount omitted (one free vote). Paid path: amount sent (>= 1) deducts tokens. Returns 409 with code PAID_VOTE_REQUIRED when free vote already used in this direction."""
     if request.value == -1:
         if target_type == "comment" and target_id is not None:
             comment = await repo.get_comment(target_id)
@@ -186,8 +186,10 @@ async def set_vote(
             if domain and domain.get("user_id") == current_user["id"]:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot dislike your own domain")
 
-    amount = request.amount if request.amount is not None else 1
-    if amount > 1:
+    # Explicit amount in body = paid vote (including 1). Omit amount = free vote only.
+    use_paid_path = request.amount is not None
+    amount = request.amount if use_paid_path else 1
+    if use_paid_path and amount >= 1:
         # Paid vote: require sufficient balance, deduct, then add_paid_votes
         user = await user_repo.get_by_id(current_user["id"])
         if not user:
