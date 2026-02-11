@@ -217,16 +217,15 @@
                     }
                 }
                 
-                // Format creation date (prefer Russian format DD.MM.YYYY if available)
-                let creationDateDisplay = d.creation_date_ru || 'N/A';
-                if (creationDateDisplay === 'N/A' && d.creation_date) {
+                // Format creation date as dd.mm.YY
+                let creationDateDisplay = 'N/A';
+                if (d.creation_date) {
                     try {
                         const date = new Date(d.creation_date);
-                        creationDateDisplay = date.toLocaleDateString('en-US', { 
-                            year: 'numeric', 
-                            month: 'short', 
-                            day: 'numeric' 
-                        });
+                        const dd = String(date.getDate()).padStart(2, '0');
+                        const mm = String(date.getMonth() + 1).padStart(2, '0');
+                        const yy = String(date.getFullYear() % 100).padStart(2, '0');
+                        creationDateDisplay = dd + '.' + mm + '.' + yy;
                     } catch (e) {
                         creationDateDisplay = 'N/A';
                     }
