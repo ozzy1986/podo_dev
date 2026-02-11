@@ -322,42 +322,7 @@
     };
 
     App.prototype.initWithdrawalFixNotice = function() {
-        // Initialize withdrawal fix notice
-        const notice = document.getElementById('withdrawal-fix-notice');
-        if (!notice) {
-            return;
-        }
-
-        // Only show notice if user is logged in
-        if (!api.token || !this.user) {
-            notice.style.display = 'none';
-            return;
-        }
-
-        // Check if user has dismissed this notice
-        const dismissed = localStorage.getItem('withdrawal-fix-notice-dismissed');
-        if (dismissed === 'true') {
-            notice.style.display = 'none';
-            return;
-        }
-
-        // Show notice and setup dismiss handler
-        notice.style.display = 'block';
-        
-        // Listen for Bootstrap alert close event
-        notice.addEventListener('closed.bs.alert', () => {
-            localStorage.setItem('withdrawal-fix-notice-dismissed', 'true');
-        });
-
-        // Also handle manual close button click (fallback)
-        const closeBtn = notice.querySelector('.btn-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                setTimeout(() => {
-                    localStorage.setItem('withdrawal-fix-notice-dismissed', 'true');
-                }, 300); // Wait for Bootstrap animation
-            });
-        }
+        // One-time withdrawal fix notice was removed; keep as no-op for any callers.
     };
 
     App.prototype.showToast = function(type, message) {
