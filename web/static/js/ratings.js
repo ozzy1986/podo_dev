@@ -394,8 +394,9 @@
                 const karmaEl = row ? row.querySelector('.rating-karma-val') : null;
                 const currentKarma = parseInt(karmaEl ? karmaEl.textContent : '0', 10) || 0;
                 const currentUserVote = row && row.querySelector('.rating-vote-up.active') ? 1 : (row && row.querySelector('.rating-vote-down.active') ? -1 : 0);
-                api.setVote('domain', domainId, null, value).then(function() {
-                    const newKarma = currentKarma + value - currentUserVote;
+                main.querySelectorAll('.paid-vote-form-wrap').forEach(function(f) { if (f.parentNode) f.parentNode.removeChild(f); });
+                api.setVote('domain', domainId, null, value).then(function(res) {
+                    const newKarma = res && res.karma != null ? res.karma : (currentKarma + value - currentUserVote);
                     if (karmaEl) karmaEl.textContent = newKarma;
                     if (row) {
                         row.querySelectorAll('.rating-vote-up, .rating-vote-down').forEach(function(b) {
@@ -403,8 +404,34 @@
                             b.classList.toggle('active', v === value);
                         });
                     }
-                }).catch(function() {
-                    if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                }).catch(function(err) {
+                    if (err && err.status === 409 && err.responseData && (err.responseData.details && err.responseData.details.code === 'PAID_VOTE_REQUIRED')) {
+                        var domainCol = row ? row.querySelector('.domain-col') : null;
+                        var domainName = (domainCol && domainCol.textContent) ? domainCol.textContent.trim() : ('domain #' + domainId);
+                        if (typeof showPaidVoteForm === 'function') {
+                            showPaidVoteForm({
+                                anchorEl: row ? row.querySelector('.karma-col') || row : document.getElementById('main-content'),
+                                targetLabel: 'Domain: ' + domainName,
+                                targetType: 'domain',
+                                targetId: domainId,
+                                targetKey: null,
+                                value: value,
+                                onSuccess: function(res) {
+                                    if (karmaEl && res && res.karma != null) karmaEl.textContent = res.karma;
+                                    if (row) {
+                                        row.querySelectorAll('.rating-vote-up, .rating-vote-down').forEach(function(b) {
+                                            const v = parseInt(b.getAttribute('data-value'), 10);
+                                            b.classList.toggle('active', v === value);
+                                        });
+                                    }
+                                }
+                            });
+                        } else {
+                            if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                        }
+                    } else {
+                        if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                    }
                 });
             });
         });

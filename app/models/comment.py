@@ -14,9 +14,10 @@ class CreateCommentRequest(BaseModel):
 
 
 class SetVoteRequest(BaseModel):
-    """Set vote (like/dislike) request."""
+    """Set vote (like/dislike) request. Optional amount for paid votes (>= 1)."""
 
     value: int = Field(..., description="1 or -1")
+    amount: Optional[int] = Field(None, ge=1, description="Paid vote amount (omit or 1 for free)")
 
 
 class CommentResponse(BaseModel):

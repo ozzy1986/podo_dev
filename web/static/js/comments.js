@@ -160,15 +160,41 @@
                 const karmaEl = row.querySelector('.karma-val');
                 const currentKarma = parseInt(karmaEl ? karmaEl.textContent : '0', 10) || 0;
                 const currentUserVote = row.querySelector('.vote-up.active') ? 1 : (row.querySelector('.vote-down.active') ? -1 : 0);
-                api.setVote('comment', commentId, null, value).then(function() {
-                    const newKarma = currentKarma + value - currentUserVote;
+                listEl.querySelectorAll('.paid-vote-form-wrap').forEach(function(f) { if (f.parentNode) f.parentNode.removeChild(f); });
+                api.setVote('comment', commentId, null, value).then(function(res) {
+                    const newKarma = res && res.karma != null ? res.karma : (currentKarma + value - currentUserVote);
                     if (karmaEl) karmaEl.textContent = newKarma;
                     row.querySelectorAll('.vote-up, .vote-down').forEach(function(b) {
                         const v = parseInt(b.getAttribute('data-value'), 10);
                         b.classList.toggle('active', v === value);
                     });
-                }).catch(function() {
-                    if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                }).catch(function(err) {
+                    if (err && err.status === 409 && err.responseData && (err.responseData.details && err.responseData.details.code === 'PAID_VOTE_REQUIRED')) {
+                        var bodyEl = row.querySelector('p.mb-1');
+                        var snippet = (bodyEl && bodyEl.textContent) ? bodyEl.textContent.trim().substring(0, 40) : '';
+                        if (snippet.length >= 40) snippet += '…';
+                        if (typeof showPaidVoteForm === 'function') {
+                            showPaidVoteForm({
+                                anchorEl: row.querySelector('.vote-buttons') || row,
+                                targetLabel: 'Comment: ' + (snippet || ('#' + commentId)),
+                                targetType: 'comment',
+                                targetId: commentId,
+                                targetKey: null,
+                                value: value,
+                                onSuccess: function(res) {
+                                    if (karmaEl && res && res.karma != null) karmaEl.textContent = res.karma;
+                                    row.querySelectorAll('.vote-up, .vote-down').forEach(function(b) {
+                                        const v = parseInt(b.getAttribute('data-value'), 10);
+                                        b.classList.toggle('active', v === value);
+                                    });
+                                }
+                            });
+                        } else {
+                            if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                        }
+                    } else {
+                        if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                    }
                 });
             });
         });

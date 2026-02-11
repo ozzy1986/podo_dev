@@ -1,11 +1,12 @@
 """
-Tests for comments and votes API: create comment (auto-like), set_vote, block dislike on own comment/domain.
+Tests for comments and votes API: create comment (auto-like), set_vote, block dislike on own comment/domain, paid votes (409, success, insufficient balance).
 """
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.api.deps import get_comment_repo, get_domain_repo, get_current_user
+from app.api.deps import get_comment_repo, get_domain_repo, get_current_user, get_user_repo
+from app.core.exceptions import PaidVoteRequiredError
 
 
 @pytest.fixture
@@ -27,6 +28,7 @@ def mock_comment_repo():
     repo.create_comment = AsyncMock()
     repo.get_comment = AsyncMock(return_value=None)
     repo.set_vote = AsyncMock()
+    repo.add_paid_votes = AsyncMock()
     repo.list_comments = AsyncMock(return_value=[])
     repo.count_comments = AsyncMock(return_value=0)
     repo.list_replies = AsyncMock(return_value=[])
@@ -35,6 +37,14 @@ def mock_comment_repo():
     repo.remove_vote = AsyncMock(return_value=True)
     repo.delete_comment = AsyncMock(return_value=True)
     repo.update_comment_moderation = AsyncMock()
+    return repo
+
+
+@pytest.fixture
+def mock_user_repo():
+    repo = MagicMock()
+    repo.get_by_id = AsyncMock(return_value={"id": 1, "accumulated_balance": 100.0})
+    repo.update_balance = AsyncMock(return_value={"id": 1, "accumulated_balance": 95.0})
     return repo
 
 
@@ -154,3 +164,112 @@ async def test_set_vote_like_own_comment_allowed(client, test_app, auth_headers_
     finally:
         test_app.dependency_overrides.pop(get_comment_repo, None)
         test_app.dependency_overrides.pop(get_domain_repo, None)
+
+
+@pytest.mark.asyncio
+async def test_set_vote_same_direction_returns_409_paid_vote_required(client, test_app, auth_headers_comments, mock_comment_repo, mock_domain_repo, sample_user):
+    """When user already voted in same direction, API returns 409 with code PAID_VOTE_REQUIRED."""
+    mock_comment_repo.get_comment.return_value = {"id": 5, "author_id": 999}
+    mock_comment_repo.set_vote.side_effect = PaidVoteRequiredError("Paid vote required")
+    test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
+    test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
+
+    try:
+        resp = client.post(
+            "/api/v1/votes?target_type=comment&target_id=5&value=1",
+            json={"value": 1},
+            headers=auth_headers_comments,
+        )
+        assert resp.status_code == 409
+        body = resp.json()
+        details = body.get("details") or {}
+        assert details.get("code") == "PAID_VOTE_REQUIRED"
+    finally:
+        test_app.dependency_overrides.pop(get_comment_repo, None)
+        test_app.dependency_overrides.pop(get_domain_repo, None)
+
+
+@pytest.mark.asyncio
+async def test_set_paid_vote_success(client, test_app, auth_headers_comments, mock_comment_repo, mock_domain_repo, mock_user_repo, sample_user):
+    """Paid vote with sufficient balance: deducts balance, adds votes, returns karma."""
+    mock_domain_repo.get_by_id.return_value = {"id": 10, "user_id": 999}
+    mock_comment_repo.add_paid_votes.return_value = {"value": 1, "amount": 6}
+    mock_comment_repo.get_entity_karma.return_value = 10
+    test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
+    test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
+    test_app.dependency_overrides[get_user_repo] = lambda: mock_user_repo
+
+    try:
+        resp = client.post(
+            "/api/v1/votes?target_type=domain&target_id=10&value=1",
+            json={"value": 1, "amount": 5},
+            headers=auth_headers_comments,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("value") == 1
+        assert data.get("karma") == 10
+        mock_user_repo.update_balance.assert_called_once()
+        assert mock_user_repo.update_balance.call_args[0][1] == -5.0
+        mock_comment_repo.add_paid_votes.assert_called_once()
+        add_kw = mock_comment_repo.add_paid_votes.call_args[1]
+        assert add_kw["amount"] == 5
+        assert add_kw["value"] == 1
+    finally:
+        test_app.dependency_overrides.pop(get_comment_repo, None)
+        test_app.dependency_overrides.pop(get_domain_repo, None)
+        test_app.dependency_overrides.pop(get_user_repo, None)
+
+
+@pytest.mark.asyncio
+async def test_set_paid_vote_insufficient_balance_returns_400(client, test_app, auth_headers_comments, mock_comment_repo, mock_domain_repo, mock_user_repo, sample_user):
+    """Paid vote with amount greater than balance returns 400."""
+    mock_user_repo.get_by_id.return_value = {"id": 1, "accumulated_balance": 2.0}
+    mock_domain_repo.get_by_id.return_value = {"id": 10, "user_id": 999}
+    test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
+    test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
+    test_app.dependency_overrides[get_user_repo] = lambda: mock_user_repo
+
+    try:
+        resp = client.post(
+            "/api/v1/votes?target_type=domain&target_id=10&value=1",
+            json={"value": 1, "amount": 5},
+            headers=auth_headers_comments,
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert "insufficient" in (body.get("error") or body.get("detail") or "").lower()
+        mock_comment_repo.add_paid_votes.assert_not_called()
+        mock_user_repo.update_balance.assert_not_called()
+    finally:
+        test_app.dependency_overrides.pop(get_comment_repo, None)
+        test_app.dependency_overrides.pop(get_domain_repo, None)
+        test_app.dependency_overrides.pop(get_user_repo, None)
+
+
+@pytest.mark.asyncio
+async def test_set_paid_vote_no_existing_vote_refunds_and_returns_400(client, test_app, auth_headers_comments, mock_comment_repo, mock_domain_repo, mock_user_repo, sample_user):
+    """Paid vote when no vote row exists: add_paid_votes raises BadRequestError; balance is refunded."""
+    from app.core.exceptions import BadRequestError as AppBadRequestError
+
+    mock_domain_repo.get_by_id.return_value = {"id": 10, "user_id": 999}
+    mock_comment_repo.add_paid_votes.side_effect = AppBadRequestError("No vote found; use free vote first")
+    test_app.dependency_overrides[get_comment_repo] = lambda: mock_comment_repo
+    test_app.dependency_overrides[get_domain_repo] = lambda: mock_domain_repo
+    test_app.dependency_overrides[get_user_repo] = lambda: mock_user_repo
+
+    try:
+        resp = client.post(
+            "/api/v1/votes?target_type=domain&target_id=10&value=1",
+            json={"value": 1, "amount": 3},
+            headers=auth_headers_comments,
+        )
+        assert resp.status_code == 400
+        assert mock_user_repo.update_balance.call_count == 2
+        calls = mock_user_repo.update_balance.call_args_list
+        assert calls[0][0][1] == -3.0
+        assert calls[1][0][1] == 3.0
+    finally:
+        test_app.dependency_overrides.pop(get_comment_repo, None)
+        test_app.dependency_overrides.pop(get_domain_repo, None)
+        test_app.dependency_overrides.pop(get_user_repo, None)

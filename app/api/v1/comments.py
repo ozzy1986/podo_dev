@@ -10,11 +10,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 
-from app.api.deps import get_comment_repo, get_domain_repo, get_current_user, get_current_user_optional
+from app.api.deps import get_comment_repo, get_domain_repo, get_current_user, get_current_user_optional, get_user_repo
 from app.repositories.comment_repo import CommentRepository
 from app.repositories.domain_repo import DomainRepository
+from app.repositories.user_repo import UserRepository
 from app.models.comment import CreateCommentRequest, SetVoteRequest, CommentResponse
-from app.core.exceptions import NotFoundError, BadRequestError, PermissionError as AppPermissionError
+from app.core.exceptions import NotFoundError, BadRequestError, PermissionError as AppPermissionError, PaidVoteRequiredError
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +173,9 @@ async def set_vote(
     current_user: dict = Depends(get_current_user),
     repo: CommentRepository = Depends(get_comment_repo),
     domain_repo: DomainRepository = Depends(get_domain_repo),
+    user_repo: UserRepository = Depends(get_user_repo),
 ):
-    """Set like (+1) or dislike (-1) on a comment or entity. One vote per user per target. Author/owner cannot dislike their own comment/domain."""
+    """Set like (+1) or dislike (-1). Free path: amount omitted or 1. Paid path: amount > 1 deducts tokens. Returns 409 with code PAID_VOTE_REQUIRED when free vote already used in this direction."""
     if request.value == -1:
         if target_type == "comment" and target_id is not None:
             comment = await repo.get_comment(target_id)
@@ -183,6 +185,34 @@ async def set_vote(
             domain = await domain_repo.get_by_id(target_id)
             if domain and domain.get("user_id") == current_user["id"]:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot dislike your own domain")
+
+    amount = request.amount if request.amount is not None else 1
+    if amount > 1:
+        # Paid vote: require sufficient balance, deduct, then add_paid_votes
+        user = await user_repo.get_by_id(current_user["id"])
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        balance = float(user.get("accumulated_balance") or 0)
+        if balance < amount:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Insufficient balance for this vote amount",
+            )
+        try:
+            await user_repo.update_balance(current_user["id"], -float(amount), 0)
+            row = await repo.add_paid_votes(
+                user_id=current_user["id"],
+                target_type=target_type,
+                target_id=target_id,
+                target_key=target_key,
+                value=request.value,
+                amount=amount,
+            )
+        except BadRequestError as e:
+            await user_repo.update_balance(current_user["id"], float(amount), 0)
+            raise HTTPException(status_code=e.status_code, detail=e.message)
+        karma = await repo.get_entity_karma(target_type, target_id, target_key)
+        return {"ok": True, "target_type": target_type, "target_id": target_id, "target_key": target_key, "value": row["value"], "karma": karma}
     try:
         row = await repo.set_vote(
             user_id=current_user["id"],
@@ -191,6 +221,8 @@ async def set_vote(
             target_key=target_key,
             value=request.value,
         )
+    except PaidVoteRequiredError as e:
+        raise e
     except BadRequestError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     return {"ok": True, "target_type": target_type, "target_id": target_id, "target_key": target_key, "value": row["value"]}

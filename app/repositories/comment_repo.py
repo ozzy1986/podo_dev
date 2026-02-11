@@ -6,7 +6,7 @@ import logging
 from typing import Optional, Dict, Any, List
 
 from app.repositories.base import BaseRepository
-from app.core.exceptions import NotFoundError, ConflictError, BadRequestError
+from app.core.exceptions import NotFoundError, ConflictError, BadRequestError, PaidVoteRequiredError
 
 logger = logging.getLogger(__name__)
 
@@ -178,9 +178,54 @@ class CommentRepository(BaseRepository):
         target_key: Optional[str],
         value: int,
     ) -> Dict[str, Any]:
-        """Set or update vote (+1 or -1). One vote per user per target."""
+        """Set or update free vote (+1 or -1). One free like and one free dislike per user per target. Raises PaidVoteRequiredError if user already voted in this direction."""
         if value not in (1, -1):
             raise BadRequestError("Vote value must be 1 or -1")
+        tt, tid, tkey = _vote_target_params(target_type, target_id, target_key)
+        if tid is not None:
+            existing = await self.db.fetchrow(
+                "SELECT id, value, amount, free_like_used, free_dislike_used FROM votes WHERE user_id = $1 AND target_type = $2 AND target_id = $3 AND target_key IS NULL",
+                user_id, tt, tid,
+            )
+        else:
+            existing = await self.db.fetchrow(
+                "SELECT id, value, amount, free_like_used, free_dislike_used FROM votes WHERE user_id = $1 AND target_type = $2 AND target_id IS NULL AND target_key = $3",
+                user_id, tt, tkey,
+            )
+        if existing:
+            cur_val = existing.get("value")
+            if cur_val is not None and cur_val == value:
+                raise PaidVoteRequiredError("Paid vote required")
+            # Opposite direction (or legacy row without value): switch vote, amount=1, set free_* for new direction
+            free_like = existing.get("free_like_used") or (value == 1)
+            free_dislike = existing.get("free_dislike_used") or (value == -1)
+            row = await self.db.fetchrow(
+                "UPDATE votes SET value = $1, amount = 1, free_like_used = $2, free_dislike_used = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *",
+                value, free_like, free_dislike, existing["id"],
+            )
+        else:
+            free_like = value == 1
+            free_dislike = value == -1
+            row = await self.db.fetchrow(
+                "INSERT INTO votes (user_id, target_type, target_id, target_key, value, amount, free_like_used, free_dislike_used) VALUES ($1, $2, $3, $4, $5, 1, $6, $7) RETURNING *",
+                user_id, tt, tid, tkey, value, free_like, free_dislike,
+            )
+        return dict(row)
+
+    async def add_paid_votes(
+        self,
+        user_id: int,
+        target_type: str,
+        target_id: Optional[int],
+        target_key: Optional[str],
+        value: int,
+        amount: int,
+    ) -> Dict[str, Any]:
+        """Add paid votes to existing vote row (same direction). Requires existing row with same value. Returns updated row."""
+        if value not in (1, -1):
+            raise BadRequestError("Vote value must be 1 or -1")
+        if amount < 1:
+            raise BadRequestError("Paid vote amount must be at least 1")
         tt, tid, tkey = _vote_target_params(target_type, target_id, target_key)
         if tid is not None:
             existing = await self.db.fetchrow(
@@ -192,18 +237,15 @@ class CommentRepository(BaseRepository):
                 "SELECT id, value FROM votes WHERE user_id = $1 AND target_type = $2 AND target_id IS NULL AND target_key = $3",
                 user_id, tt, tkey,
             )
-        if existing:
-            row = await self.db.fetchrow(
-                "UPDATE votes SET value = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
-                value, existing["id"],
-            )
-        else:
-            row = await self.db.fetchrow(
-                "INSERT INTO votes (user_id, target_type, target_id, target_key, value) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-                user_id, tt, tid, tkey, value,
-            )
+        if not existing:
+            raise BadRequestError("No vote found; use free vote first")
+        if existing["value"] != value:
+            raise BadRequestError("Vote direction does not match existing vote")
+        row = await self.db.fetchrow(
+            "UPDATE votes SET amount = amount + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
+            amount, existing["id"],
+        )
         return dict(row)
-        # Note: comment karma is updated by DB trigger when target_type = 'comment'
 
     async def remove_vote(
         self,
@@ -261,17 +303,17 @@ class CommentRepository(BaseRepository):
         target_id: Optional[int],
         target_key: Optional[str],
     ) -> int:
-        """Sum of votes for an entity (comment, domain, registrar, hoster, zone, wallet)."""
+        """Sum of votes for an entity: SUM(value * amount) (comment, domain, registrar, hoster, zone, wallet)."""
         tt, tid, tkey = _vote_target_params(target_type, target_id, target_key)
         if tid is not None:
             val = await self.db.fetchval(
-                "SELECT COALESCE(SUM(value), 0)::int FROM votes WHERE target_type = $1 AND target_id = $2 AND target_key IS NULL",
+                "SELECT COALESCE(SUM(v.value * COALESCE(v.amount, 1)), 0)::int FROM votes v WHERE v.target_type = $1 AND v.target_id = $2 AND v.target_key IS NULL",
                 tt,
                 tid,
             )
         else:
             val = await self.db.fetchval(
-                "SELECT COALESCE(SUM(value), 0)::int FROM votes WHERE target_type = $1 AND target_id IS NULL AND target_key = $2",
+                "SELECT COALESCE(SUM(v.value * COALESCE(v.amount, 1)), 0)::int FROM votes v WHERE v.target_type = $1 AND v.target_id IS NULL AND v.target_key = $2",
                 tt,
                 tkey,
             )

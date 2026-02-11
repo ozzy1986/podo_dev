@@ -68,10 +68,11 @@ class API {
                 return data;
             }
 
-            // For non-200 responses, throw error
-            const message = (data && data.error) || response.statusText || 'Request failed';
+            // For non-200 responses, throw error (attach response body for 409 etc.)
+            const message = (data && data.error) || (data && data.detail && typeof data.detail === 'object' && data.detail.error) || response.statusText || 'Request failed';
             const apiError = new Error(message);
             apiError.status = response.status;
+            apiError.responseData = data;
             throw apiError;
         } catch (error) {
             // Only log actual network/system errors to console
@@ -433,11 +434,13 @@ class API {
         return this.request(`/comments/${commentId}`, { method: 'DELETE' });
     }
 
-    async setVote(targetType, targetId, targetKey, value) {
+    async setVote(targetType, targetId, targetKey, value, amount) {
         let url = `/votes?target_type=${encodeURIComponent(targetType)}&value=${value}`;
         if (targetId != null) url += `&target_id=${targetId}`;
         if (targetKey) url += `&target_key=${encodeURIComponent(targetKey)}`;
-        return this.request(url, { method: 'POST', body: JSON.stringify({ value }) });
+        const body = { value };
+        if (amount != null && amount >= 1) body.amount = amount;
+        return this.request(url, { method: 'POST', body: JSON.stringify(body) });
     }
 
     async removeVote(targetType, targetId, targetKey) {

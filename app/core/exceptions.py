@@ -65,9 +65,17 @@ class RateLimitError(AppException):
 
 class ConflictError(AppException):
     """Conflict error (e.g., duplicate resource)."""
-    
+
     def __init__(self, message: str = "Resource conflict", details: Optional[Dict[str, Any]] = None):
         super().__init__(message, status_code=409, details=details)
+
+
+class PaidVoteRequiredError(ConflictError):
+    """User already used free vote in this direction; paid vote form required."""
+
+    def __init__(self, message: str = "Paid vote required", details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, details=details or {})
+        self.details["code"] = "PAID_VOTE_REQUIRED"
 
 
 class BadRequestError(AppException):
