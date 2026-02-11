@@ -63,6 +63,17 @@ body {
     color: var(--text-color);
 }
 
+/* Paid vote form: use theme vars so it respects light/dark */
+.paid-vote-form-wrap {
+    background-color: var(--bg-card);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.paid-vote-form-wrap .text-muted {
+    color: var(--text-muted);
+}
+
 .btn {
     border-radius: 0.375rem;
     font-weight: 500;

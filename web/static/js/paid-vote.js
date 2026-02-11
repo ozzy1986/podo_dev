@@ -26,7 +26,7 @@
         var title = t(titleKey, isLike ? 'Paid like' : 'Paid dislike');
 
         var wrap = document.createElement('div');
-        wrap.className = 'paid-vote-form-wrap border rounded p-2 bg-light mt-2';
+        wrap.className = 'paid-vote-form-wrap border rounded p-2 mt-2';
         wrap.setAttribute('data-paid-vote', '1');
 
         var balance = 0;
