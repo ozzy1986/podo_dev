@@ -347,7 +347,7 @@
                                     <span data-i18n="age">Age</span> ${this.getSortIndicator('age')}
                                 </th>
                                 <th class="text-center creation-date-col sortable" data-sort="creation_date">
-                                    <span data-i18n="registration_date">Registration Date</span> ${this.getSortIndicator('creation_date')}
+                                    <span data-i18n="registration_date">Reg date</span> ${this.getSortIndicator('creation_date')}
                                 </th>
                                 <th class="text-end rating-col sortable" data-sort="rating">
                                     <span data-i18n="rating_col">Rating</span> ${this.getSortIndicator('rating')}
