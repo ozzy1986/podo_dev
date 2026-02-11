@@ -94,9 +94,13 @@
                 });
             }
 
-            cancelBtn.addEventListener('click', function() {
-                if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-            });
+            function removeFormAndRow() {
+                var tr = wrap.closest ? wrap.closest('tr[data-paid-vote-row]') : null;
+                var parent = wrap.parentNode;
+                if (parent) parent.removeChild(wrap);
+                if (tr && tr.parentNode) tr.parentNode.removeChild(tr);
+            }
+            cancelBtn.addEventListener('click', removeFormAndRow);
 
             submitBtn.addEventListener('click', function() {
                 var amt = parseInt(amountInput.value, 10);
@@ -111,7 +115,7 @@
                 showError('');
                 submitBtn.disabled = true;
                 api.setVote(targetType, targetId, targetKey, value, amt).then(function(res) {
-                    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+                    removeFormAndRow();
                     onSuccess(res);
                     if (typeof app !== 'undefined' && app.showToast) {
                         app.showToast(isLike ? (t('paid_like_done', 'Paid like applied')) : (t('paid_dislike_done', 'Paid dislike applied')), 'success');
@@ -123,11 +127,30 @@
             });
         }
 
-        // Insert after anchor
-        if (anchorEl.nextSibling) {
-            anchorEl.parentNode.insertBefore(wrap, anchorEl.nextSibling);
+        // Insert after anchor. If anchor is inside a table row, insert a full-width row
+        // so the form is not rendered out of bounds (invalid div-in-tr breaks layout).
+        var row = anchorEl.closest ? anchorEl.closest('tr') : null;
+        if (row) {
+            var cells = row.querySelectorAll('td, th');
+            var colspan = cells.length || 10;
+            var newRow = document.createElement('tr');
+            newRow.setAttribute('data-paid-vote-row', '1');
+            var cell = document.createElement('td');
+            cell.setAttribute('colspan', String(colspan));
+            cell.className = 'paid-vote-form-cell align-top';
+            cell.appendChild(wrap);
+            newRow.appendChild(cell);
+            if (row.nextSibling) {
+                row.parentNode.insertBefore(newRow, row.nextSibling);
+            } else {
+                row.parentNode.appendChild(newRow);
+            }
         } else {
-            anchorEl.parentNode.appendChild(wrap);
+            if (anchorEl.nextSibling) {
+                anchorEl.parentNode.insertBefore(wrap, anchorEl.nextSibling);
+            } else {
+                anchorEl.parentNode.appendChild(wrap);
+            }
         }
 
         wrap.innerHTML = '<span class="text-muted small">' + (t('loading', 'Loading...')) + '</span>';

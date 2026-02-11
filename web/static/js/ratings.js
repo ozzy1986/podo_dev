@@ -394,7 +394,11 @@
                 const karmaEl = row ? row.querySelector('.rating-karma-val') : null;
                 const currentKarma = parseInt(karmaEl ? karmaEl.textContent : '0', 10) || 0;
                 const currentUserVote = row && row.querySelector('.rating-vote-up.active') ? 1 : (row && row.querySelector('.rating-vote-down.active') ? -1 : 0);
-                main.querySelectorAll('.paid-vote-form-wrap').forEach(function(f) { if (f.parentNode) f.parentNode.removeChild(f); });
+                main.querySelectorAll('.paid-vote-form-wrap').forEach(function(f) {
+                    var tr = f.closest ? f.closest('tr[data-paid-vote-row]') : null;
+                    if (f.parentNode) f.parentNode.removeChild(f);
+                    if (tr && tr.parentNode) tr.parentNode.removeChild(tr);
+                });
                 api.setVote('domain', domainId, null, value).then(function(res) {
                     const newKarma = res && res.karma != null ? res.karma : (currentKarma + value - currentUserVote);
                     if (karmaEl) karmaEl.textContent = newKarma;
@@ -413,10 +417,11 @@
                     if (isPaidVoteRequired) {
                         var domainCol = row ? row.querySelector('.domain-col') : null;
                         var domainName = (domainCol && domainCol.textContent) ? domainCol.textContent.trim() : ('domain #' + domainId);
+                        var domainLabel = (typeof i18n !== 'undefined' && i18n.t ? i18n.t('domain') : 'Domain');
                         if (typeof showPaidVoteForm === 'function') {
                             showPaidVoteForm({
                                 anchorEl: row ? row.querySelector('.karma-col') || row : document.getElementById('main-content'),
-                                targetLabel: 'Domain: ' + domainName,
+                                targetLabel: domainLabel + ': ' + domainName,
                                 targetType: 'domain',
                                 targetId: domainId,
                                 targetKey: null,

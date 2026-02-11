@@ -163,6 +163,7 @@
             var self = this;
             var domainId = data.id;
             var domainName = data.domain || ('domain #' + domainId);
+            var domainLabel = (typeof i18n !== 'undefined' && i18n.t ? i18n.t('domain') : 'Domain');
             var currentKarma = typeof data.karma === 'number' ? data.karma : 0;
             var currentUserVote = data.user_vote != null ? data.user_vote : null;
             var block = document.querySelector('.domain-vote-block');
@@ -191,7 +192,7 @@
                             if (typeof showPaidVoteForm === 'function') {
                                 showPaidVoteForm({
                                     anchorEl: block || document.getElementById('main-content'),
-                                    targetLabel: 'Domain: ' + domainName,
+                                    targetLabel: domainLabel + ': ' + domainName,
                                     targetType: 'domain',
                                     targetId: domainId,
                                     targetKey: null,

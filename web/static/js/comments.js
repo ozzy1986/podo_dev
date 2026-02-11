@@ -181,7 +181,7 @@
                         if (typeof showPaidVoteForm === 'function') {
                             showPaidVoteForm({
                                 anchorEl: row.querySelector('.vote-buttons') || row,
-                                targetLabel: 'Comment: ' + (snippet || ('#' + commentId)),
+                                targetLabel: ((typeof i18n !== 'undefined' && i18n.t ? i18n.t('comment') : 'Comment') + ': ' + (snippet || ('#' + commentId))),
                                 targetType: 'comment',
                                 targetId: commentId,
                                 targetKey: null,
