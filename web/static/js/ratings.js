@@ -234,8 +234,21 @@
                 
                 const domainPagePath = '/domain/' + encodeURIComponent(d.domain);
                 const viewDomainPageLabel = (typeof i18n !== 'undefined' && i18n.t) ? i18n.t('view_domain_page') : 'Domain page';
+                const ratingVal = (d.rating != null && d.rating !== undefined) ? d.rating : d.total_earnings;
+                const lengthVal = (d.length != null && d.length !== undefined) ? d.length : d.sld_length;
+                const karmaVal = typeof d.karma === 'number' ? d.karma : 0;
+                const uv = d.user_vote;
+                const upActive = uv === 1 ? ' active' : '';
+                const downActive = uv === -1 ? ' active' : '';
+                const likesCell = api.token
+                    ? `<div class="d-inline-flex align-items-center justify-content-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary rating-vote-up${upActive}" data-domain-id="${d.id}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
+                        <span class="d-inline-block text-center px-1 rating-karma-val" style="min-width: 1.5rem;">${karmaVal}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rating-vote-down${downActive}" data-domain-id="${d.id}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>
+                       </div>`
+                    : `<span class="rating-karma-val">${karmaVal}</span><small class="text-muted ms-1" data-i18n="login_to_vote">Log in to vote</small>`;
                 domainRows += `
-                    <tr>
+                    <tr data-domain-id="${d.id}">
                         <td class="text-center rank-col ${rankClass}">${rank}</td>
                         <td class="domain-col">${domainDisplay}${shortDescriptionHtml}</td>
                         <td class="text-center domain-page-col">
@@ -244,18 +257,19 @@
                             </a>
                         </td>
                         <td class="text-center newest-col"></td>
-                        <td class="text-center length-col">${d.length || 'N/A'}</td>
-                        <td class="text-center age-col">${d.age || 'N/A'}</td>
+                        <td class="text-center length-col">${lengthVal != null && lengthVal !== '' ? lengthVal : 'N/A'}</td>
+                        <td class="text-center age-col">${d.age != null && d.age !== '' ? d.age : 'N/A'}</td>
                         <td class="text-center creation-date-col">${creationDateDisplay}</td>
-                        <td class="text-end rating-col"><strong>${this.formatNumber(d.rating, 2)}</strong></td>
+                        <td class="text-end rating-col"><strong>${this.formatNumber(ratingVal != null ? ratingVal : 0, 2)}</strong></td>
                         <td class="text-end weight-col">${this.formatNumber(d.weight, 2)}</td>
+                        <td class="text-end karma-col">${likesCell}</td>
                     </tr>
                 `;
             });
         } else {
             domainRows = `
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4" data-i18n="no_domains_found">No mining domains found</td>
+                    <td colspan="10" class="text-center text-muted py-4" data-i18n="no_domains_found">No mining domains found</td>
                 </tr>
             `;
         }
@@ -332,6 +346,7 @@
                                 <th class="text-end weight-col sortable" data-sort="weight">
                                     <span data-i18n="weight">Weight</span> ${this.getSortIndicator('weight')}
                                 </th>
+                                <th class="text-end karma-col" data-i18n="likes">Likes</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -357,7 +372,39 @@
         // Setup length filter (carousel)
         this.setupLengthFilterListener();
         
+        // Setup domain vote (like/dislike) buttons
+        this.setupRatingVoteListeners();
+        
         this.updateI18n();
+    };
+
+    App.prototype.setupRatingVoteListeners = function() {
+        const self = this;
+        const main = document.getElementById('main-content');
+        if (!main) return;
+        main.querySelectorAll('.rating-vote-up, .rating-vote-down').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!api.token) return;
+                const domainId = parseInt(btn.getAttribute('data-domain-id'), 10);
+                const value = parseInt(btn.getAttribute('data-value'), 10);
+                if (isNaN(domainId)) return;
+                api.setVote('domain', domainId, null, value).then(function() {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const wallet = urlParams.get('wallet') || null;
+                    const sldLength = urlParams.get('sld_length');
+                    const sld = (sldLength === 'all' || !sldLength) ? 'all' : (parseInt(sldLength, 10) || 18);
+                    const registrarId = urlParams.get('registrar_id') ? parseInt(urlParams.get('registrar_id'), 10) : null;
+                    const hosterId = urlParams.get('hoster_id') ? parseInt(urlParams.get('hoster_id'), 10) : null;
+                    const zone = urlParams.get('zone') || null;
+                    const page = parseInt(urlParams.get('page'), 10) || 1;
+                    self.loadRating(page, self.ratingSortBy, self.ratingSortOrder, wallet, sld, registrarId, hosterId, zone);
+                }).catch(function() {
+                    if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                });
+            });
+        });
     };
 
     App.prototype.setupLengthFilterListener = function() {

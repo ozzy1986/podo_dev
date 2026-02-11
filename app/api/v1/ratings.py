@@ -1,5 +1,5 @@
 """
-Public rating API routes (no auth required).
+Public rating API routes (no auth required; optional auth for karma/user_vote).
 """
 
 import math
@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from app.db.postgresql import get_pg_pool
 from app.repositories.rating_repo import RatingRepository
 from app.repositories.domain_repo import DomainRepository
-from app.api.deps import get_domain_repo
+from app.api.deps import get_domain_repo, get_comment_repo, get_current_user_optional
+from app.repositories.comment_repo import CommentRepository
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,10 @@ def _paginated(total: int, per_page: int) -> int:
 async def get_public_domain_by_name(
     domain_name: str,
     domain_repo: DomainRepository = Depends(get_domain_repo),
+    comment_repo: CommentRepository = Depends(get_comment_repo),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
-    """Get public domain info by name (for domain page and comments). Returns id, domain, owner_wallet, etc."""
+    """Get public domain info by name (for domain page and comments). Returns id, domain, owner_wallet, karma, user_vote, etc."""
     domain = await domain_repo.get_by_domain(domain_name)
     if not domain:
         raise HTTPException(status_code=404, detail="Domain not found")
@@ -60,7 +63,13 @@ async def get_public_domain_by_name(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Domain not found")
-    return _serialize(dict(row))
+    out = _serialize(dict(row))
+    domain_id = out["id"]
+    out["karma"] = await comment_repo.get_entity_karma("domain", domain_id, None)
+    out["user_vote"] = await comment_repo.get_user_vote(
+        current_user["id"], "domain", domain_id, None
+    ) if current_user else None
+    return out
 
 
 @router.get("/domains/rating")
@@ -75,13 +84,16 @@ async def domains_rating(
     hoster_id: Optional[int] = Query(None),
     zone: Optional[str] = Query(None),
     repo: RatingRepository = Depends(_get_rating_repo),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
-    """Get public domain ratings. No authentication required."""
+    """Get public domain ratings with karma and user_vote when authenticated."""
     sld = None if sld_length == 'all' else (int(sld_length) if sld_length else None)
+    user_id = current_user["id"] if current_user else None
     result = await repo.get_domains_rating(
         page=page, per_page=per_page, sort_by=sort_by, sort_order=sort_order,
         wallet=wallet, sld_length=sld if sld_length != 'all' else 'all',
         registrar_id=registrar_id, hoster_id=hoster_id, zone=zone,
+        user_id=user_id,
     )
     result["domains"] = [_serialize(i) for i in result.pop("items", [])]
     result["total_pages"] = _paginated(result["total"], result["per_page"])
@@ -95,10 +107,13 @@ async def domains_rating_by_date(
     sort_order: str = Query('asc', pattern='^(asc|desc)$'),
     wallet: Optional[str] = Query(None),
     repo: RatingRepository = Depends(_get_rating_repo),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
-    """Get domains sorted by registration date. No authentication required."""
+    """Get domains sorted by registration date with karma and user_vote when authenticated."""
+    user_id = current_user["id"] if current_user else None
     result = await repo.get_domains_rating_by_registration_date(
         page=page, per_page=per_page, sort_order=sort_order, wallet=wallet,
+        user_id=user_id,
     )
     result["domains"] = [_serialize(i) for i in result.pop("items", [])]
     result["total_pages"] = _paginated(result["total"], result["per_page"])

@@ -39,8 +39,9 @@ class RatingRepository(BaseRepository):
         registrar_id: Optional[int] = None,
         hoster_id: Optional[int] = None,
         zone: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> Dict:
-        """Get paginated domain ratings."""
+        """Get paginated domain ratings with karma and optional user_vote."""
         order = 'DESC' if sort_order == 'desc' else 'ASC'
         sort_col = _DOMAIN_SORT_MAP.get(sort_by, _DOMAIN_SORT_MAP['rating'])
 
@@ -95,20 +96,34 @@ class RatingRepository(BaseRepository):
         """
 
         offset = (page - 1) * per_page
+        karma_select = ", (SELECT COALESCE(SUM(v.value), 0)::int FROM votes v WHERE v.target_type = 'domain' AND v.target_id = d.id) AS karma"
+        if user_id is not None:
+            params.extend([per_page, offset, user_id])
+            user_vote_select = f", (SELECT v.value FROM votes v WHERE v.user_id = ${idx + 3} AND v.target_type = 'domain' AND v.target_id = d.id LIMIT 1) AS user_vote"
+        else:
+            params.extend([per_page, offset])
+            user_vote_select = ", NULL::smallint AS user_vote"
+
         data_sql = f"""
             SELECT d.id, d.domain, d.description, d.sld_length, d.total_earnings, d.weight,
                    d.is_clickable, d.a_record_points_to_us, d.promoted_at, d.user_id, u.wallet,
                    d.creation_date, d.verification_time
+                   {karma_select}
+                   {user_vote_select}
             FROM domains d
             JOIN users u ON d.user_id = u.id
             WHERE {where_sql}
             ORDER BY {order_sql}
             LIMIT ${idx} OFFSET ${idx + 1}
         """
-        params.extend([per_page, offset])
-
         rows = await self.db.fetch(data_sql, *params)
         items = [dict(r) for r in rows]
+        for it in items:
+            if it.get("user_vote") is not None:
+                it["user_vote"] = int(it["user_vote"])
+            else:
+                it["user_vote"] = None
+            it.setdefault("karma", 0)
 
         return {"items": items, "total": total, "page": page, "per_page": per_page}
 
@@ -118,8 +133,9 @@ class RatingRepository(BaseRepository):
         per_page: int = 100,
         sort_order: str = 'asc',
         wallet: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> Dict:
-        """Get domains sorted by registration/creation date."""
+        """Get domains sorted by registration/creation date with karma and optional user_vote."""
         order = 'ASC' if sort_order == 'asc' else 'DESC'
 
         where_clauses = ["d.verified = TRUE", "d.is_mining = TRUE"]
@@ -139,21 +155,39 @@ class RatingRepository(BaseRepository):
         )
 
         offset = (page - 1) * per_page
+        karma_select = ", (SELECT COALESCE(SUM(v.value), 0)::int FROM votes v WHERE v.target_type = 'domain' AND v.target_id = d.id) AS karma"
+        if user_id is not None:
+            params.extend([per_page, offset, user_id])
+            user_vote_select = f", (SELECT v.value FROM votes v WHERE v.user_id = ${idx + 3} AND v.target_type = 'domain' AND v.target_id = d.id LIMIT 1) AS user_vote"
+        else:
+            params.extend([per_page, offset])
+            user_vote_select = ", NULL::smallint AS user_vote"
+
         rows = await self.db.fetch(
             f"""
             SELECT d.id, d.domain, d.description, d.sld_length, d.total_earnings, d.weight,
                    d.is_clickable, d.a_record_points_to_us, d.promoted_at, d.user_id, u.wallet,
                    d.creation_date, d.verification_time
+                   {karma_select}
+                   {user_vote_select}
             FROM domains d
             JOIN users u ON d.user_id = u.id
             WHERE {where_sql}
             ORDER BY d.creation_date {order} NULLS LAST, d.domain ASC
             LIMIT ${idx} OFFSET ${idx + 1}
             """,
-            *params, per_page, offset
+            *params
         )
 
-        return {"items": [dict(r) for r in rows], "total": total, "page": page, "per_page": per_page}
+        items = [dict(r) for r in rows]
+        for it in items:
+            if it.get("user_vote") is not None:
+                it["user_vote"] = int(it["user_vote"])
+            else:
+                it["user_vote"] = None
+            it.setdefault("karma", 0)
+
+        return {"items": items, "total": total, "page": page, "per_page": per_page}
 
     async def get_registrars_rating(self, page: int = 1, per_page: int = 100) -> Dict:
         """Get registrar rankings by total earnings."""

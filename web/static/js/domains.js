@@ -132,6 +132,22 @@
                         </div>
                     </div>
                     
+                    <div class="mt-4 domain-vote-block">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="text-muted me-1" data-i18n="domain_likes">Likes:</span>
+                            ${api.token ? `
+                                <div class="d-inline-flex align-items-center">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary domain-vote-up ${(data.user_vote === 1) ? 'active' : ''}" data-value="1" title="Like" aria-label="Like"><i class="bi bi-arrow-up"></i></button>
+                                    <span class="d-inline-block text-center px-2 domain-karma-val" style="min-width: 2rem;">${typeof data.karma === 'number' ? data.karma : 0}</span>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary domain-vote-down ${(data.user_vote === -1) ? 'active' : ''}" data-value="-1" title="Dislike" aria-label="Dislike"><i class="bi bi-arrow-down"></i></button>
+                                </div>
+                            ` : `
+                                <span class="domain-karma-val">${typeof data.karma === 'number' ? data.karma : 0}</span>
+                                <small class="text-muted" data-i18n="login_to_vote">Log in to vote</small>
+                            `}
+                        </div>
+                    </div>
+                    
                     <div id="domain-comments-container" class="mt-4"></div>
                     
                     <div class="mt-4 text-center">
@@ -144,6 +160,20 @@
             if (data.id != null) {
                 this.renderCommentsBlock('domain-comments-container', 'domain', data.id, null);
             }
+            var self = this;
+            var domainName = data.domain;
+            var domainId = data.id;
+            document.querySelectorAll('.domain-vote-up, .domain-vote-down').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    if (!api.token) return;
+                    var value = parseInt(btn.getAttribute('data-value'), 10);
+                    api.setVote('domain', domainId, null, value).then(function() {
+                        self.loadDomainPage(domainName);
+                    }).catch(function() {
+                        if (typeof app !== 'undefined' && app.showToast) app.showToast('Vote failed', 'danger');
+                    });
+                });
+            });
             
         } catch (error) {
             console.error('[App] Error loading domain page:', error);
